@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="recall · 回忆相册 — 上传照片记录当下，多年以后一起回忆。照片永久保存在 GitHub 上，所有人可见。">
+<meta name="description" content="recall · 回忆相册 — 上传照片记录当下，多年以后一起回忆。登录即可上传，发布后所有人可见。">
 <title>recall · 回忆相册</title>
 <style>
   :root {
@@ -282,7 +282,7 @@
   <section class="hero container">
     <span class="eyebrow"><span class="dot"></span>上传照片 · 记录当下 · 以后回忆</span>
     <h1>把今天的瞬间，<span class="grad">留给未来的回忆</span></h1>
-    <p class="lead">上传照片、写下故事。回忆会先保存在你的浏览器里，发布后将永久陈列在公开回忆墙上 —— 照片存在 GitHub，任何人都可以浏览，任何人都可以贡献。</p>
+    <p class="lead">上传照片、写下故事。回忆会先保存在你的浏览器里，一键发布即上公开回忆墙 —— 注册一个邮箱账号就能上传，任何人都可以浏览。</p>
     <div class="hero-ctas">
       <button class="btn btn-primary" data-goto="local-upload">📷 上传回忆</button>
       <button class="btn btn-ghost" data-goto="wall">🖼️ 看看回忆墙</button>
@@ -372,16 +372,36 @@
       <summary>🚀 部署与配置指引 <span class="arr">›</span></summary>
       <div class="setup-body">
         <ol>
-          <li><b>创建仓库</b>：在 GitHub 新建一个 <b>公开</b> 仓库，把 <code>index.html</code> 上传进去。</li>
-          <li><b>修改配置</b>：编辑 <code>index.html</code> 中的 <code>CONFIG.repo</code>，改成 <code>你的用户名/仓库名</code>（默认分支若不是 main，同时修改 <code>CONFIG.branch</code>）。如需账号登录功能，在 <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a> 免费建项目后，把 URL 和 anon key 填入 <code>CONFIG.supabaseUrl / supabaseKey</code>（留空则隐藏登录入口）。</li>
+          <li><b>创建仓库</b>：在 GitHub 新建一个 <b>公开</b> 仓库，把 <code>index.html</code> 和 <code>supabase.js</code> 上传进去。</li>
+          <li><b>修改配置</b>：编辑 <code>index.html</code> 中的 <code>CONFIG.repo</code>（源码仓库，用于 Star 按钮和问题反馈）；在 <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a> 免费建项目后，把 URL 和 anon key 填入 <code>CONFIG.supabaseUrl / supabaseKey</code>（账号登录与回忆墙都依赖它）。</li>
           <li><b>开启 Pages</b>：仓库 Settings → Pages → Source 选择 <code>main</code> 分支 → Save。约 1 分钟后通过 <code>https://用户名.github.io/仓库名/</code> 访问。</li>
-          <li><b>创建 photos 目录</b>：打开 <code>https://github.com/用户名/仓库名/upload/main/photos</code> 上传任意一张照片，目录即自动创建，回忆墙开始工作。</li>
+          <li><b>初始化云数据</b>：在 Supabase 项目的 SQL Editor 中运行以下语句，创建回忆墙数据表与公开存储桶：</li>
         </ol>
+        <pre style="background:#0f1c33;color:#c9e3ff;padding:14px 16px;border-radius:8px;overflow:auto;font-size:12px;line-height:1.7;font-family:var(--mono)">create table wall (
+  id uuid primary key default gen_random_uuid(),
+  title text default '', author text default '',
+  note text default '', mono text default '',
+  date timestamptz default now(), storage_path text not null,
+  owner uuid references auth.users(id), created_at timestamptz default now()
+);
+alter table wall enable row level security;
+create policy "wall_read" on wall for select using (true);
+create policy "wall_write" on wall for insert to authenticated with check (true);
+create policy "wall_edit" on wall for update to authenticated using (auth.uid() = owner);
+create table comments (
+  id uuid primary key default gen_random_uuid(),
+  wall_id uuid references wall(id) on delete cascade,
+  author text default '匿名', text text not null,
+  created_at timestamptz default now()
+);
+alter table comments enable row level security;
+create policy "cmt_read" on comments for select using (true);
+create policy "cmt_write" on comments for insert to authenticated with check (true);
+insert into storage.buckets (id, name, public) values ('photos','photos',true);
+create policy "img_read" on storage.objects for select using (bucket_id = 'photos');
+create policy "img_write" on storage.objects for insert to authenticated with check (bucket_id = 'photos');</pre>
         <p class="muted small">
-          💡 回忆墙通过 GitHub 公开 API 读取仓库 <code>photos/</code> 目录，访客无需登录即可浏览；
-          上传需要 GitHub 账号 —— 你自己（仓库主人）在上传页可直接提交、立即上墙；
-          其他访客提交时 GitHub 会自动帮他们 Fork 并发起 Pull Request，由你审核合并后上墙。
-          文件名建议按 <code>日期_作者_标题.jpg</code> 命名，回忆墙会自动解析展示；发布弹窗会为带独白的照片生成同名 <code>.json</code> 独白/留言文件链接。
+          💡 回忆墙照片存储在 Supabase 云端（免费层 1GB，约数千张压缩照片）。登录用户在站内即可直接上传上墙、编写独白、发表留言，无需 GitHub 账号；未登录访客可自由浏览。网站源码存放在 GitHub 仓库，可随时查看和备份。
         </p>
       </div>
     </details>
@@ -397,7 +417,7 @@
           <span class="brand-mark">R</span>
           <span>recall</span>
         </a>
-        <p>一个生长在 GitHub 上的共享回忆相册。照片即记忆，仓库即时间胶囊。</p>
+        <p>一个自由生长的共享回忆相册。照片即记忆，云端即时间胶囊。</p>
       </div>
       <div class="footer-col">
         <h4>导航</h4>
@@ -409,11 +429,11 @@
       <div class="footer-col">
         <h4>GitHub</h4>
         <a id="footRepo" target="_blank" rel="noopener">仓库主页</a>
-        <a id="footUpload" target="_blank" rel="noopener">上传照片</a>
+        <a id="footUpload" data-goto="local-upload" style="cursor:pointer">上传照片</a>
         <a id="footIssues" target="_blank" rel="noopener">问题反馈</a>
       </div>
     </div>
-    <div class="copyright">© 2026 recall · 照片存储于 GitHub · 用 ❤ 和回忆构建</div>
+    <div class="copyright">© 2026 recall · 照片存储于云端 · 用 ❤ 和回忆构建</div>
   </div>
 </footer>
 
@@ -429,77 +449,30 @@
     <span id="lbMeta"></span>
     <p id="lbNote"></p>
     <div class="lb-mono" id="lbMono" hidden>
-      <label>🕯️ 独白 · 仅自己可见可编写，保存在本设备</label>
+      <label>🕯️ 独白 · 仅发布者可见可编写</label>
       <textarea id="monoText" maxlength="300" placeholder="写下只属于这张照片的话…"></textarea>
       <div style="text-align:right;margin-top:8px"><button class="lb-btn primary" id="monoSave">保存独白</button></div>
     </div>
     <div class="lb-cmts" id="lbCmts" hidden>
-      <div class="cmt-head"><span>💬 留言</span><button class="lb-btn" id="cmtOpen">写留言</button></div>
+      <div class="cmt-head"><span>💬 留言</span></div>
       <div id="cmtList"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <input type="text" id="cmtText" placeholder="写一条留言…" maxlength="200" style="flex:1;min-width:150px;border:1px solid #3b4a68;border-radius:8px;padding:8px 12px;font-size:13px;font-family:var(--sans);color:var(--text);background:var(--surface)">
+        <button class="lb-btn primary" id="cmtSend">留言</button>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- ================= 发布弹窗 ================= -->
 <div class="modal" id="publishModal" hidden>
-  <div class="modal-card">
+  <div class="modal-card" style="max-width:460px">
     <h3>🚀 发布到回忆墙</h3>
-    <p class="muted small">照片将提交到 GitHub 仓库，合并后对所有人可见。整个过程约 1 分钟。</p>
-    <ol class="pub-steps">
-      <li>
-        <h4>复制建议的文件名</h4>
-        <p>回忆墙会按「日期_作者_标题」自动解析展示（可选步骤，不改也能上墙）。</p>
-        <code id="pubNames"></code>
-        <div class="row"><button class="btn btn-ghost btn-sm" data-copy="#pubNames">复制文件名</button></div>
-      </li>
-      <li>
-        <h4>打开 GitHub 上传页，拖入照片</h4>
-        <p>可在页面上点铅笔图标把文件重命名为建议名称。</p>
-        <div class="row"><a class="btn btn-primary btn-sm" id="pubUploadLink" target="_blank" rel="noopener">打开上传页 ↗</a></div>
-        <div id="pubMonoBox" hidden style="margin-top:12px">
-          <p style="font-size:13px;color:var(--text)"><b>🕯️ 同步发布独白（可选）</b></p>
-          <p class="muted small">下面为每张带独白的照片生成配套 JSON 文件，打开后内容已自动预填，直接 Commit 即可。公开后，其他人可以为这段独白留言。</p>
-          <div class="row" id="pubMonoLinks"></div>
-        </div>
-      </li>
-      <li>
-        <h4>填写提交说明并提交</h4>
-        <p>把说明粘贴到 Commit changes 的输入框里，点击 Commit changes。</p>
-        <code id="pubMsg"></code>
-        <div class="row"><button class="btn btn-ghost btn-sm" data-copy="#pubMsg">复制说明</button></div>
-      </li>
-      <li>
-        <h4>等待合并上墙</h4>
-        <p>若你是仓库主人，提交后立即上墙；若提示无写入权限，GitHub 会自动 Fork 到你的账号，提交后点击「Create pull request」发起合并请求，仓库主人审核通过即可在回忆墙看到。没有 GitHub 账号？<a href="https://github.com/signup" target="_blank" rel="noopener">免费注册一个</a>。</p>
-      </li>
-    </ol>
+    <p class="muted small" id="pubDesc">照片将直接上传到公开回忆墙，完成后立即对所有人可见。</p>
+    <p id="pubProg" class="muted small" style="margin-top:10px;min-height:20px"></p>
     <div class="row" style="justify-content:flex-end">
       <button class="btn btn-ghost" id="pubClose">关闭</button>
     </div>
-  </div>
-</div>
-
-<!-- ================= 留言弹窗 ================= -->
-<div class="modal" id="cmtModal" hidden>
-  <div class="modal-card">
-    <h3>💬 给这段独白留言</h3>
-    <p class="muted small">留言通过 GitHub 提交（会自动 Fork 并发起 PR），仓库主人审核合并后对所有人可见。</p>
-    <input type="text" id="cmtAuthor" placeholder="你的名字" maxlength="20">
-    <textarea id="cmtText" placeholder="想对这段回忆说点什么…" maxlength="200"></textarea>
-    <ol class="pub-steps">
-      <li>
-        <h4>复制最新的文件内容</h4>
-        <p id="cmtHowTo"></p>
-        <code id="cmtSnippet"></code>
-        <div class="row"><button class="btn btn-ghost btn-sm" data-copy="#cmtSnippet">复制内容</button></div>
-      </li>
-      <li>
-        <h4>打开独白文件并提交</h4>
-        <p>提交更改后发起 Pull Request，等待仓库主人合并。</p>
-        <div class="row"><a class="btn btn-primary btn-sm" id="cmtEditLink" target="_blank" rel="noopener">打开文件 ↗</a></div>
-      </li>
-    </ol>
-    <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="cmtClose">关闭</button></div>
   </div>
 </div>
 
@@ -641,78 +614,63 @@ function renderLb() {
   $("#lbMeta").textContent = [it.author, it.date].filter(Boolean).join(" · ") || "";
   $("#lbCount").textContent = lbItems.length > 1 ? `${lbIdx + 1} / ${lbItems.length}` : "";
   const isLocal = it.kind === "local";
-  $("#lbMono").hidden = !isLocal;
+  const canEditMono = isLocal || (it.kind === "wall" && sbUser && it.owner === sbUser.id);
+  $("#lbMono").hidden = !canEditMono;
   $("#lbCmts").hidden = isLocal;
   if (isLocal) {
     $("#lbNote").textContent = it.note || "";
-    $("#monoText").value = it.mono || "";
   } else {
-    $("#lbNote").textContent = it.fetched ? (it.note || "（这段回忆还没有独白）") : "（独白加载中…）";
+    $("#lbNote").textContent = it.mono || "（这段回忆还没有独白）";
     renderCmts(it);
-    if (it.baseName) fetchWallJson(it);
+    if (it.id) fetchWallCmts(it);
   }
+  $("#monoText").value = canEditMono ? (it.mono || "") : "";
 }
 function renderCmts(it) {
-  const list = it.comments || [];
-  $("#cmtList").innerHTML = list.length
+  const list = it.comments;
+  $("#cmtList").innerHTML = list && list.length
     ? list.map(c => `<div class="cmt"><b>${esc(c.a)}</b><span class="cmt-d">${esc(c.d)}</span><p>${esc(c.t)}</p></div>`).join("")
     : `<div class="empty">还没有留言，来做第一个留言的人吧。</div>`;
 }
-async function fetchWallJson(it) {
-  if (it.fetched) return;
-  it.fetched = true;
+async function fetchWallCmts(it) {
+  if (it.cmtsFetched) return;
+  it.cmtsFetched = true;
   try {
-    const r = await fetch(`https://raw.githubusercontent.com/${CONFIG.repo}/${CONFIG.branch}/${CONFIG.photosPath}/${encodeURIComponent(it.baseName)}.json`);
-    if (r.ok) {
-      const d = await r.json();
-      it.wallData = d;
-      it.note = d.mono || "";
-      it.comments = Array.isArray(d.comments) ? d.comments : [];
-    }
+    const { data } = await sb.from("comments").select("*").eq("wall_id", it.id).order("created_at");
+    it.comments = (data || []).map(c => ({ a: c.author, t: c.text, d: fmtDate(c.created_at) }));
   } catch {}
-  if (lbItems[lbIdx] === it) renderLb();
+  if (lbItems[lbIdx] === it) renderCmts(it);
 }
 $("#monoSave").onclick = async () => {
   const it = lbItems[lbIdx];
-  if (!it || it.kind !== "local" || !it.saveMono) return;
+  if (!it) return;
   const v = $("#monoText").value.trim();
-  await it.saveMono(v);
-  it.mono = v;
-  toast("独白已保存 ✓");
+  if (it.kind === "local" && it.saveMono) {
+    await it.saveMono(v); it.mono = v; toast("独白已保存 ✓");
+  } else if (it.kind === "wall" && sbUser && it.owner === sbUser.id) {
+    const { error } = await sb.from("wall").update({ mono: v }).eq("id", it.id);
+    if (error) return toast("保存失败，请稍后再试", true);
+    it.mono = v; toast("独白已更新 ✓");
+  }
 };
 
-/* ---- 留言（公开独白） ---- */
-let cmtItem = null;
-$("#cmtOpen").onclick = () => {
+/* ---- 留言（站内直接提交） ---- */
+$("#cmtSend").onclick = async () => {
   const it = lbItems[lbIdx];
   if (!it || it.kind !== "wall") return;
-  cmtItem = it;
-  $("#cmtAuthor").value = localStorage.getItem("recall-author") || "";
-  $("#cmtText").value = "";
-  buildCmt();
-  $("#cmtModal").hidden = false;
-};
-function buildCmt() {
-  if (!cmtItem) return;
-  const a = $("#cmtAuthor").value.trim() || "匿名";
+  if (!sbUser) { toast("登录后才能留言哦", true); $("#navLoginBtn").click(); return; }
   const t = $("#cmtText").value.trim();
-  const data = cmtItem.wallData || { mono: "", comments: [] };
-  const json = t
-    ? JSON.stringify({ mono: data.mono || "", comments: [...(data.comments || []), { a, t, d: fmtDate(new Date()) }] }, null, 2)
-    : "";
-  $("#cmtSnippet").textContent = json || "（先在上方写下留言内容）";
-  const base = cmtItem.baseName + ".json";
-  if (cmtItem.wallData) {
-    $("#cmtEditLink").href = `https://github.com/${CONFIG.repo}/edit/${CONFIG.branch}/${CONFIG.photosPath}/${encodeURIComponent(base)}`;
-    $("#cmtHowTo").textContent = "打开文件后：全选原有内容 → 粘贴下方新内容 → Commit changes 发起 PR。";
-  } else {
-    $("#cmtEditLink").href = `https://github.com/${CONFIG.repo}/new/${CONFIG.branch}/${CONFIG.photosPath}?filename=${encodeURIComponent(base)}&value=${encodeURIComponent(json)}`;
-    $("#cmtHowTo").textContent = "独白文件尚未创建，内容已自动预填你的留言，打开后直接 Commit changes 即可。";
-  }
-}
-["cmtAuthor", "cmtText"].forEach(id => $("#" + id).addEventListener("input", buildCmt));
-$("#cmtClose").onclick = () => { $("#cmtModal").hidden = true; };
-$("#cmtModal").addEventListener("click", e => { if (e.target === e.currentTarget) $("#cmtModal").hidden = true; });
+  if (!t) return toast("先写点内容吧", true);
+  const name = sbUser.user_metadata?.name || sbUser.email?.split("@")[0] || "匿名";
+  $("#cmtSend").disabled = true;
+  const { error } = await sb.from("comments").insert({ wall_id: it.id, author: name, text: t });
+  $("#cmtSend").disabled = false;
+  if (error) return toast("留言失败，请稍后再试", true);
+  $("#cmtText").value = "";
+  it.comments = [...(it.comments || []), { a: name, t, d: fmtDate(new Date().toISOString()) }];
+  renderCmts(it);
+  toast("留言成功 ✓");
+};
 function closeLightbox() { $("#lightbox").hidden = true; document.body.style.overflow = ""; }
 const lbStep = d => { lbIdx = (lbIdx + d + lbItems.length) % lbItems.length; renderLb(); };
 $("#lbClose").onclick = closeLightbox;
@@ -726,7 +684,6 @@ document.addEventListener("keydown", e => {
     if (e.key === "ArrowRight") lbStep(1);
   }
   if (e.key === "Escape" && !$("#publishModal").hidden) closePublish();
-  if (e.key === "Escape" && !$("#cmtModal").hidden) $("#cmtModal").hidden = true;
   if (e.key === "Escape" && !$("#authModal").hidden) $("#authModal").hidden = true;
 });
 
@@ -813,26 +770,37 @@ async function renderLocal() {
   }));
 }
 
-/* ===================== 发布弹窗 ===================== */
-function openPublish(rec) {
-  const d = fmtDate(rec.date);
-  const hhmm = new Date().toTimeString().slice(0, 5).replace(":", "");
-  const clean = s => (s || "匿名").replace(/[\\/:*?"<>|\s]+/g, "-");
-  const names = rec.photos.map((p, i) => {
-    const ext = (p.name.match(/\.(\w+)$/) || [, "jpg"])[1].toLowerCase();
-    return `${d}_${clean(rec.author)}_${clean(rec.title)}-${hhmm}${rec.photos.length > 1 ? "-" + (i + 1) : ""}.${ext}`;
-  });
-  $("#pubNames").textContent = names.join("\n");
-  $("#pubMsg").textContent = `photo: ${rec.title}` + (rec.note ? ` — ${rec.note}` : "");
-  const monoPhotos = rec.photos.map((p, i) => ({ p, i })).filter(x => (x.p.mono || "").trim());
-  $("#pubMonoBox").hidden = !monoPhotos.length;
-  $("#pubMonoLinks").innerHTML = monoPhotos.map(({ p, i }) => {
-    const base = names[i].replace(/\.\w+$/, "");
-    const json = JSON.stringify({ mono: p.mono.trim(), comments: [] }, null, 2);
-    const href = `https://github.com/${CONFIG.repo}/new/${CONFIG.branch}/${CONFIG.photosPath}?filename=${encodeURIComponent(base + ".json")}&value=${encodeURIComponent(json)}`;
-    return `<a class="btn btn-ghost btn-sm" href="${esc(href)}" target="_blank" rel="noopener">📄 ${esc(base)}.json ↗</a>`;
-  }).join("");
+/* ===================== 发布上墙（直传云端） ===================== */
+let pubBusy = false;
+async function openPublish(rec) {
+  if (!sb || !sbUser) { toast("请先登录，再发布上墙", true); $("#navLoginBtn").click(); return; }
+  if (pubBusy) return;
+  pubBusy = true;
+  $("#pubDesc").textContent = `正在把「${rec.title || "未命名回忆"}」的 ${rec.photos.length} 张照片上传到公开回忆墙…`;
+  $("#pubProg").textContent = "";
   $("#publishModal").hidden = false;
+  try {
+    for (let i = 0; i < rec.photos.length; i++) {
+      const p = rec.photos[i];
+      const ext = ((p.name || "img.jpg").match(/\.(\w+)$/) || [, "jpg"])[1].toLowerCase();
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      $("#pubProg").textContent = `上传中 ${i + 1} / ${rec.photos.length} …`;
+      const up = await sb.storage.from("photos").upload(path, p.blob, { contentType: p.type || "image/jpeg" });
+      if (up.error) throw up.error;
+      const ins = await sb.from("wall").insert({
+        title: rec.title || "未命名回忆", author: rec.author || "", note: rec.note || "",
+        date: rec.date || new Date().toISOString(), mono: p.mono || "",
+        storage_path: path, owner: sbUser.id
+      });
+      if (ins.error) throw ins.error;
+    }
+    $("#pubProg").textContent = `✓ 全部 ${rec.photos.length} 张照片已上墙`;
+    toast("发布成功，已上墙 ✓");
+    loadWall(true);
+  } catch (err) {
+    $("#pubProg").textContent = "上传失败：" + (err.message || "请稍后再试");
+    toast("发布失败，请稍后再试", true);
+  } finally { pubBusy = false; }
 }
 const closePublish = () => { $("#publishModal").hidden = true; };
 $("#pubClose").onclick = closePublish;
@@ -906,42 +874,30 @@ function tick() {
   requestAnimationFrame(tick);
 }
 
-/* ===================== 回忆墙（公开） ===================== */
-const WALL_CACHE = "recall-wall-cache";
-const wallUploadUrl = `https://github.com/${CONFIG.repo}/upload/${CONFIG.branch}/${CONFIG.photosPath}`;
-
-function parseWallName(name) {
-  const base = name.replace(/\.\w+$/, "");
-  const m = base.match(/^(\d{4}-\d{2}-\d{2})_(.+?)_(.+?)(?:-\d+)*$/);
-  if (m) return { date: m[1], author: m[2], title: m[3] };
-  return { date: "", author: "", title: base };
-}
+/* ===================== 回忆墙（公开，云端直读） ===================== */
+const wallUrl = path => `${CONFIG.supabaseUrl}/storage/v1/object/public/photos/${encodeURIComponent(path)}`;
 
 function wallState(icon, title, msg, showUpload) {
   $("#wallGrid").innerHTML = "";
   $("#wallState").hidden = false;
   $("#wallState").innerHTML = `
     <div class="big">${icon}</div><h3>${title}</h3><p>${msg}</p>
-    ${showUpload && !isPlaceholder ? `<a class="btn btn-primary" href="${wallUploadUrl}" target="_blank" rel="noopener">📷 上传第一张照片 ↗</a>` : ""}
-    ${isPlaceholder ? `<a class="btn btn-ghost" href="#setup">查看部署指引</a>` : ""}`;
+    ${showUpload ? `<button class="btn btn-primary" data-goto="local-upload">📷 上传第一张照片</button>` : ""}`;
 }
 
-function renderWall(items, t) {
-  if (!items.length) { $("#tabWallCnt").textContent = "0"; $("#wallMeta").textContent = "目录为空"; return wallState("🌱", "回忆墙还是空的", "photos 目录中还没有照片，上传第一张吧。", true); }
+function renderWall(rows) {
+  if (!rows.length) { $("#tabWallCnt").textContent = "0"; $("#wallMeta").textContent = "还没有回忆"; return wallState("🌱", "回忆墙还是空的", "登录后上传第一张照片，让大家一起回忆。", true); }
   $("#wallState").hidden = true;
-  $("#tabWallCnt").textContent = items.length;
-  $("#wallMeta").textContent = `共 ${items.length} 张回忆 · 更新于 ${fmtTime(t)} · 来自 GitHub 仓库`;
-  const sorted = [...items].sort((a, b) => b.name.localeCompare(a.name));
-  $("#wallGrid").innerHTML = sorted.map((it, i) => {
-    const p = parseWallName(it.name);
-    return `<div class="p-card" data-w="${i}">
-      <div class="ph"><img src="${esc(it.url)}" loading="lazy" alt="${esc(p.title)}"></div>
+  $("#tabWallCnt").textContent = rows.length;
+  $("#wallMeta").textContent = `共 ${rows.length} 张回忆 · 更新于 ${fmtTime(Date.now())}`;
+  $("#wallGrid").innerHTML = rows.map((it, i) => `
+    <div class="p-card" data-w="${i}">
+      <div class="ph"><img src="${esc(wallUrl(it.storage_path))}" loading="lazy" alt="${esc(it.title || "回忆")}">${it.mono ? '<span class="badge">🕯️ 有独白</span>' : ""}</div>
       <div class="info">
-        <h4>${esc(p.title)}</h4>
-        <div class="meta">${p.date ? `📅 ${p.date}` : ""}${p.author ? ` · ✍️ ${esc(p.author)}` : ""}${!p.date && !p.author ? "🖼️ 来自公开仓库" : ""}</div>
+        <h4>${esc(it.title || "未命名回忆")}</h4>
+        <div class="meta">${it.author ? `✍️ ${esc(it.author)} · ` : ""}📅 ${fmtDate(it.date)}</div>
       </div>
-    </div>`;
-  }).join("");
+    </div>`).join("");
   $("#wallGrid").querySelectorAll("img").forEach(img => img.addEventListener("error", () => {
     const d = document.createElement("div");
     d.textContent = "💔";
@@ -949,45 +905,30 @@ function renderWall(items, t) {
     img.replaceWith(d);
   }));
   $("#wallGrid").querySelectorAll("[data-w]").forEach(el => el.addEventListener("click", () => {
-    openLightbox(sorted.map(x => ({ src: x.url, ...parseWallName(x.name), kind: "wall", baseName: x.name.replace(/\.\w+$/, "") })), +el.dataset.w);
+    openLightbox(rows.map(x => ({
+      src: wallUrl(x.storage_path), title: x.title, author: x.author, date: fmtDate(x.date),
+      kind: "wall", id: x.id, owner: x.owner, mono: x.mono || ""
+    })), +el.dataset.w);
   }));
 }
 
 async function loadWall(force) {
-  if (isPlaceholder) {
+  if (!sb) {
     $("#tabWallCnt").textContent = "0";
-    $("#wallMeta").textContent = "尚未配置仓库";
-    return wallState("⚙️", "还没有配置 GitHub 仓库", "网站管理员需将 index.html 中的 CONFIG.repo 改为自己的公开仓库地址，回忆墙才能开始收集回忆。", false);
-  }
-  if (!force) {
-    try {
-      const c = JSON.parse(localStorage.getItem(WALL_CACHE) || "null");
-      if (c && Date.now() - c.t < 5 * 60 * 1000) return renderWall(c.items, c.t);
-    } catch {}
+    $("#wallMeta").textContent = "未配置";
+    return wallState("⚙️", "还没有配置云服务", "网站管理员需在 index.html 中填写 CONFIG.supabaseUrl / supabaseKey，回忆墙才能开始收集回忆。", false);
   }
   $("#wallMeta").textContent = "加载中…";
   try {
-    const r = await fetch(`https://api.github.com/repos/${CONFIG.repo}/contents/${CONFIG.photosPath}`, { headers: { Accept: "application/vnd.github+json" } });
-    if (r.status === 404) {
-      $("#tabWallCnt").textContent = "0"; $("#wallMeta").textContent = "目录为空";
-      return wallState("🌱", "回忆墙还是空的", `仓库中还没有照片。上传第一张照片，目录 ${CONFIG.photosPath}/ 会自动创建。`, true);
-    }
-    if (r.status === 403) {
-      $("#wallMeta").textContent = "请求受限";
-      return wallState("⏳", "GitHub API 请求过于频繁", "公开 API 有每小时次数限制，请稍等几分钟再刷新。", false);
-    }
-    if (!r.ok) throw new Error(r.status);
-    const items = (await r.json())
-      .filter(f => f.type === "file" && /\.(jpe?g|png|gif|webp|avif|bmp)$/i.test(f.name))
-      .map(f => ({ name: f.name, url: f.download_url }));
-    localStorage.setItem(WALL_CACHE, JSON.stringify({ t: Date.now(), items }));
-    renderWall(items, Date.now());
+    const { data, error } = await sb.from("wall").select("*").order("created_at", { ascending: false });
+    if (error) throw error;
+    renderWall(data || []);
   } catch {
     $("#wallMeta").textContent = "加载失败";
-    wallState("⚠️", "回忆墙加载失败", "无法连接 GitHub API，请检查网络后重试。", false);
+    wallState("⚠️", "回忆墙加载失败", "无法连接云服务，请检查网络后重试。", false);
   }
 }
-$("#wallRefresh").onclick = () => { localStorage.removeItem(WALL_CACHE); loadWall(true); toast("正在刷新回忆墙…"); };
+$("#wallRefresh").onclick = () => { loadWall(true); toast("正在刷新回忆墙…"); };
 
 /* ===================== 账号（Supabase 邮箱登录） ===================== */
 let sb = null, sbUser = null, authMode = "login";
@@ -1090,9 +1031,7 @@ $("#importInput").addEventListener("change", async e => {
 const repoBase = "https://github.com/" + CONFIG.repo;
 $("#starBtn").href = repoBase;
 $("#footRepo").href = repoBase;
-$("#footUpload").href = wallUploadUrl;
 $("#footIssues").href = repoBase + "/issues";
-$("#pubUploadLink").href = wallUploadUrl;
 document.title = CONFIG.siteName + " · 回忆相册";
 
 if (!isPlaceholder) {
