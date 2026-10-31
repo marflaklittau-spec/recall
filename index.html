@@ -73,6 +73,8 @@
   .gh-star-btn .left, .gh-star-btn .right { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; padding: 8px 14px; }
   .gh-star-btn .left { background: var(--surface-2); color: var(--text); }
   .gh-star-btn .right { background: var(--surface); color: var(--muted); border-left: 1px solid var(--border); font-family: var(--mono); }
+  .nav-auth { display: flex; align-items: center; gap: 10px; }
+  .user-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--primary); background: var(--primary-dim); border: 1px solid rgba(37,99,235,.35); border-radius: 999px; padding: 6px 14px; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* ===== Hero ===== */
   .hero { padding: 56px 0 36px; text-align: center; }
@@ -220,8 +222,9 @@
   .cmt p { font-size: 13px; color: #c3d2ea; margin-top: 3px; }
   .lb-cmts .empty { font-size: 12.5px; color: #7f93b5; }
 
-  .modal-card input[type="text"], .modal-card textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 14px; font-family: var(--sans); color: var(--text); background: var(--surface); }
-  .modal-card input[type="text"]:focus, .modal-card textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-dim); }
+  .modal-card input[type="text"], .modal-card input[type="email"], .modal-card input[type="password"], .modal-card textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 14px; font-family: var(--sans); color: var(--text); background: var(--surface); }
+  .modal-card input[type="text"]:focus, .modal-card input[type="email"]:focus, .modal-card input[type="password"]:focus, .modal-card textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-dim); }
+  .modal-card input { margin-top: 10px; }
   .modal-card textarea { margin-top: 10px; min-height: 70px; resize: vertical; }
 
   @media (max-width: 640px) {
@@ -257,6 +260,13 @@
       <li><a data-goto="ring">记忆环</a></li>
       <li><a href="#setup">部署指引</a></li>
     </ul>
+    <div class="nav-auth" id="navAuth">
+      <button class="btn btn-ghost btn-sm" id="navLoginBtn">👤 登录</button>
+    </div>
+    <div class="nav-auth" id="navUser" hidden>
+      <span class="user-chip" id="navUserName"></span>
+      <button class="btn btn-ghost btn-sm" id="navLogout">退出</button>
+    </div>
     <a class="gh-star-btn" id="starBtn" target="_blank" rel="noopener" aria-label="GitHub 仓库">
       <span class="left">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
@@ -321,6 +331,11 @@
       </form>
       <div class="toolbar">
         <span class="muted small" id="localMeta"></span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" id="backupBtn" type="button">📦 导出备份</button>
+          <button class="btn btn-ghost btn-sm" id="importBtn" type="button">📥 导入备份</button>
+          <input type="file" id="importInput" accept="application/json,.json" hidden>
+        </div>
       </div>
       <div class="photo-grid" id="localGrid"></div>
       <div class="state-box" id="localEmpty" hidden>
@@ -358,7 +373,7 @@
       <div class="setup-body">
         <ol>
           <li><b>创建仓库</b>：在 GitHub 新建一个 <b>公开</b> 仓库，把 <code>index.html</code> 上传进去。</li>
-          <li><b>修改配置</b>：编辑 <code>index.html</code> 中的 <code>CONFIG.repo</code>，改成 <code>你的用户名/仓库名</code>（默认分支若不是 main，同时修改 <code>CONFIG.branch</code>）。</li>
+          <li><b>修改配置</b>：编辑 <code>index.html</code> 中的 <code>CONFIG.repo</code>，改成 <code>你的用户名/仓库名</code>（默认分支若不是 main，同时修改 <code>CONFIG.branch</code>）。如需账号登录功能，在 <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a> 免费建项目后，把 URL 和 anon key 填入 <code>CONFIG.supabaseUrl / supabaseKey</code>（留空则隐藏登录入口）。</li>
           <li><b>开启 Pages</b>：仓库 Settings → Pages → Source 选择 <code>main</code> 分支 → Save。约 1 分钟后通过 <code>https://用户名.github.io/仓库名/</code> 访问。</li>
           <li><b>创建 photos 目录</b>：打开 <code>https://github.com/用户名/仓库名/upload/main/photos</code> 上传任意一张照片，目录即自动创建，回忆墙开始工作。</li>
         </ol>
@@ -488,7 +503,25 @@
   </div>
 </div>
 
+<!-- ================= 账号弹窗 ================= -->
+<div class="modal" id="authModal" hidden>
+  <div class="modal-card" style="max-width:420px">
+    <h3 id="authTitle">👤 登录账号</h3>
+    <p class="muted small">用邮箱登录后，你的昵称会自动署名在上传和留言里；在其他设备登录同一账号即可恢复身份。照片数据请用「导出 / 导入备份」迁移。</p>
+    <input type="text" id="authName" placeholder="昵称（注册时填写）" maxlength="20" hidden>
+    <input type="email" id="authEmail" placeholder="邮箱" maxlength="60">
+    <input type="password" id="authPass" placeholder="密码（至少 6 位）" maxlength="40">
+    <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+      <button class="btn btn-primary" id="authSubmit" type="button">登录</button>
+      <button class="btn btn-ghost" id="authSwitch" type="button">没有账号？注册一个</button>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn btn-ghost" id="authClose" type="button">关闭</button></div>
+  </div>
+</div>
+
 <div id="toasts"></div>
+
+<script src="supabase.js"></script>
 
 <script>
 /* =====================================================
@@ -498,7 +531,9 @@ const CONFIG = {
   siteName: "recall",                // 站点名称
   repo:     "marflaklittau-spec/recall",   // GitHub 仓库：用户名/仓库名（必改，需为公开仓库）
   branch:   "main",                  // 仓库默认分支
-  photosPath: "photos"               // 回忆墙照片目录
+  photosPath: "photos",              // 回忆墙照片目录
+  supabaseUrl: "https://jremwdpvmdsejurwpcms.supabase.co",   // Supabase 项目 URL——账号登录用，留空则隐藏登录入口
+  supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyZW13ZHB2bWRzZWp1cndwY21zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0MjA4MTYsImV4cCI6MjEwODk5NjgxNn0.2dg6pSx9uvVvceZtlH6HaweAXU3xhdd10kq-0y-sKRs"   // Supabase 匿名 Key（anon public）
 };
 
 /* ===================== 工具函数 ===================== */
@@ -692,6 +727,7 @@ document.addEventListener("keydown", e => {
   }
   if (e.key === "Escape" && !$("#publishModal").hidden) closePublish();
   if (e.key === "Escape" && !$("#cmtModal").hidden) $("#cmtModal").hidden = true;
+  if (e.key === "Escape" && !$("#authModal").hidden) $("#authModal").hidden = true;
 });
 
 /* ===================== 我的回忆（本地） ===================== */
@@ -952,6 +988,103 @@ async function loadWall(force) {
   }
 }
 $("#wallRefresh").onclick = () => { localStorage.removeItem(WALL_CACHE); loadWall(true); toast("正在刷新回忆墙…"); };
+
+/* ===================== 账号（Supabase 邮箱登录） ===================== */
+let sb = null, sbUser = null, authMode = "login";
+const sbReady = !!(CONFIG.supabaseUrl && CONFIG.supabaseKey && window.supabase);
+if (sbReady) sb = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
+else { $("#navAuth").hidden = true; $("#navUser").hidden = true; }
+
+function applyUser(u) {
+  sbUser = u;
+  const name = u ? (u.user_metadata?.name || u.email?.split("@")[0] || "我") : "";
+  $("#navAuth").hidden = !!u || !sbReady;
+  $("#navUser").hidden = !u;
+  if (u) {
+    $("#navUserName").textContent = name;
+    $("#navUserName").title = u.email || "";
+    localStorage.setItem("recall-author", name);
+    $("#fAuthor").value = name;
+  }
+}
+if (sb) {
+  sb.auth.getUser().then(({ data: { user } }) => applyUser(user)).catch(() => {});
+  sb.auth.onAuthStateChange((_e, s) => applyUser(s?.user || null));
+}
+function syncAuthModal() {
+  const reg = authMode === "register";
+  $("#authTitle").textContent = reg ? "👤 注册账号" : "👤 登录账号";
+  $("#authName").hidden = !reg;
+  $("#authSubmit").textContent = reg ? "注册" : "登录";
+  $("#authSwitch").textContent = reg ? "已有账号？去登录" : "没有账号？注册一个";
+}
+$("#navLoginBtn").onclick = () => { authMode = "login"; syncAuthModal(); $("#authModal").hidden = false; $("#authEmail").focus(); };
+$("#authSwitch").onclick = () => { authMode = authMode === "login" ? "register" : "login"; syncAuthModal(); };
+$("#authClose").onclick = () => { $("#authModal").hidden = true; };
+$("#authModal").addEventListener("click", e => { if (e.target === e.currentTarget) $("#authModal").hidden = true; });
+$("#authSubmit").onclick = async () => {
+  const email = $("#authEmail").value.trim();
+  const pass = $("#authPass").value;
+  if (!/^\S+@\S+\.\S+$/.test(email)) return toast("请填写正确的邮箱", true);
+  if (pass.length < 6) return toast("密码至少 6 位", true);
+  $("#authSubmit").disabled = true;
+  try {
+    if (authMode === "register") {
+      const name = $("#authName").value.trim() || email.split("@")[0];
+      const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name } } });
+      if (error) throw error;
+      if (data.session) { toast("注册成功，已登录 ✓"); $("#authModal").hidden = true; applyUser(data.user); }
+      else toast("注册成功！请到邮箱点击确认链接后再登录");
+    } else {
+      const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+      if (error) throw error;
+      toast("登录成功 ✓");
+      $("#authModal").hidden = true;
+      applyUser(data.user);
+    }
+  } catch (err) {
+    toast(err.message === "Invalid login credentials" ? "邮箱或密码不正确" : (err.message || "操作失败，请稍后再试"), true);
+  } finally { $("#authSubmit").disabled = false; }
+};
+$("#navLogout").onclick = async () => { if (sb) await sb.auth.signOut(); applyUser(null); toast("已退出账号"); };
+
+/* ===================== 备份与恢复（跨设备迁移） ===================== */
+const blobToB64 = b => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); });
+$("#backupBtn").onclick = async () => {
+  const recs = await dbAll();
+  if (!recs.length) return toast("还没有可导出的回忆", true);
+  toast("正在打包备份…");
+  const memories = [];
+  for (const r of recs) memories.push({ title: r.title, author: r.author, note: r.note, date: r.date, photos: await Promise.all(r.photos.map(async p => ({ name: p.name, type: p.type, mono: p.mono || "", blob: await blobToB64(p.blob) }))) });
+  const data = { app: "recall", version: 1, exportedAt: new Date().toISOString(), identity: sbUser ? { email: sbUser.email, name: sbUser.user_metadata?.name || "" } : null, memories };
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: "application/json" }));
+  a.download = `recall-backup-${fmtDate(new Date().toISOString())}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`已导出 ${recs.length} 条回忆（含独白）✓`);
+};
+$("#importBtn").onclick = () => $("#importInput").click();
+$("#importInput").addEventListener("change", async e => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); if (data.app !== "recall" || !Array.isArray(data.memories)) throw 0; }
+  catch { return toast("备份文件无效", true); }
+  if (!confirm(`备份包含 ${data.memories.length} 条回忆（${fmtDate(data.exportedAt)} 导出）。\n导入后会追加到本设备，不会覆盖现有数据。`)) return;
+  toast("正在导入…");
+  for (const r of data.memories) {
+    const photos = [];
+    for (const p of (r.photos || [])) {
+      try { const res = await fetch(p.blob); photos.push({ name: p.name, type: p.type, mono: p.mono || "", blob: await res.blob() }); } catch {}
+    }
+    if (photos.length) await dbPut({ id: uid(), title: r.title || "导入的回忆", author: r.author || "", note: r.note || "", date: r.date || new Date().toISOString(), photos });
+  }
+  if (data.identity?.name) { localStorage.setItem("recall-author", data.identity.name); $("#fAuthor").value = data.identity.name; }
+  renderLocal(); renderRing();
+  toast("导入完成 ✓（账号请在新设备用邮箱登录）");
+});
 
 /* ===================== 链接与初始化 ===================== */
 const repoBase = "https://github.com/" + CONFIG.repo;
