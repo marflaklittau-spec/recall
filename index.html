@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="recall · 回忆相册 — 上传照片记录当下，多年以后一起回忆。照片永久保存在 GitHub 上，所有人可见。">
+<title>recall · 回忆相册</title>
+<style>
+  :root {
+    --bg: #f7f9fd;
+    --bg-soft: #edf3fb;
+    --surface: #ffffff;
+    --surface-2: #f2f6fc;
+    --border: #d8e3f4;
+    --border-soft: #e4ecf7;
+    --text: #12233f;
+    --muted: #5a6b85;
+    --blue: #0ea5e9;
+    --blue-dim: rgba(14, 165, 233, .10);
+    --primary: #2563eb;
+    --primary-dim: rgba(37, 99, 235, .10);
+    --radius: 12px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Cascadia Code", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  ::selection { background: rgba(37, 99, 235, .22); }
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12.5px; }
+
+  /* ===== 背景装饰 ===== */
+  .bg-grid {
+    position: fixed; inset: 0; z-index: -2;
+    background-image:
+      linear-gradient(var(--border-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border-soft) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 30%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 30%, transparent 75%);
+  }
+  .bg-glow { position: fixed; z-index: -1; border-radius: 50%; filter: blur(120px); opacity: .35; pointer-events: none; }
+  .bg-glow.g1 { width: 480px; height: 480px; top: -160px; left: -120px; background: rgba(37,99,235,.13); }
+  .bg-glow.g2 { width: 420px; height: 420px; top: -120px; right: -100px; background: rgba(6,182,212,.13); }
+
+  /* ===== 导航 ===== */
+  header { position: sticky; top: 0; z-index: 100; background: rgba(247, 249, 253, .82); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-soft); }
+  .nav { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; color: var(--text); }
+  .brand:hover { text-decoration: none; }
+  .brand-mark { width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #2563eb, #06b6d4); display: grid; place-items: center; font-size: 16px; color: #fff; font-weight: 800; }
+  .nav-links { display: flex; align-items: center; gap: 26px; list-style: none; }
+  .nav-links a { color: var(--muted); font-size: 14.5px; font-weight: 500; cursor: pointer; }
+  .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 18px; border-radius: 8px; font-size: 14.5px; font-weight: 600; border: 1px solid var(--border); cursor: pointer; transition: all .2s; white-space: nowrap; font-family: var(--sans); }
+  .btn:hover { text-decoration: none; }
+  .btn-sm { padding: 5px 12px; font-size: 13px; border-radius: 6px; }
+  .btn-ghost { background: transparent; color: var(--text); }
+  .btn-ghost:hover { border-color: #a9bdd8; background: var(--surface); }
+  .btn-primary { background: linear-gradient(135deg, #2f6bff, #1e56e8); border-color: transparent; color: #fff; }
+  .btn-primary:hover { background: linear-gradient(135deg, #4d8bff, #2f6bff); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(37,99,235,.35); }
+  .btn-danger { background: transparent; border-color: #f3c2c2; color: #d05252; }
+  .btn-danger:hover { background: #fdf1f1; border-color: #e39d9d; }
+
+  .gh-star-btn { display: inline-flex; align-items: stretch; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+  .gh-star-btn:hover { text-decoration: none; border-color: #a9bdd8; }
+  .gh-star-btn .left, .gh-star-btn .right { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; padding: 8px 14px; }
+  .gh-star-btn .left { background: var(--surface-2); color: var(--text); }
+  .gh-star-btn .right { background: var(--surface); color: var(--muted); border-left: 1px solid var(--border); font-family: var(--mono); }
+
+  /* ===== Hero ===== */
+  .hero { padding: 56px 0 36px; text-align: center; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--primary); background: var(--primary-dim); border: 1px solid rgba(37,99,235,.35); padding: 5px 14px; border-radius: 999px; margin-bottom: 18px; }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  .hero h1 { font-size: clamp(30px, 4.5vw, 44px); line-height: 1.2; font-weight: 800; letter-spacing: -1px; margin-bottom: 14px; }
+  .hero h1 .grad { background: linear-gradient(90deg, #2563eb, #06b6d4); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p.lead { font-size: 16.5px; color: var(--muted); max-width: 560px; margin: 0 auto 26px; }
+  .hero-ctas { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
+
+  /* ===== 主体 / 标签页 ===== */
+  .app { padding: 8px 0 56px; }
+  .tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 28px; flex-wrap: wrap; }
+  .tab { display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 14.5px; font-weight: 600; cursor: pointer; transition: all .2s; font-family: var(--sans); }
+  .tab:hover { border-color: #a9bdd8; color: var(--text); }
+  .tab.active { background: linear-gradient(135deg, #2f6bff, #1e56e8); border-color: transparent; color: #fff; box-shadow: 0 4px 16px rgba(37,99,235,.3); }
+  .tab .cnt { font-family: var(--mono); font-size: 12px; background: rgba(255,255,255,.25); border-radius: 999px; padding: 1px 8px; }
+  .tab:not(.active) .cnt { background: var(--bg-soft); color: var(--muted); }
+  .view { display: none; }
+  .view.active { display: block; animation: fadein .3s ease; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+
+  /* ===== 照片卡片网格 ===== */
+  .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; }
+  .p-card { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); overflow: hidden; transition: all .25s; cursor: pointer; }
+  .p-card:hover { border-color: var(--border); transform: translateY(-3px); box-shadow: 0 12px 32px rgba(18,35,63,.10); }
+  .p-card .ph { position: relative; aspect-ratio: 4/3; background: var(--bg-soft); overflow: hidden; }
+  .p-card .ph img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s; }
+  .p-card:hover .ph img { transform: scale(1.04); }
+  .p-card .badge { position: absolute; top: 10px; right: 10px; background: rgba(18,35,63,.72); color: #fff; font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 2px 9px; backdrop-filter: blur(4px); }
+  .p-card .info { padding: 13px 15px 15px; }
+  .p-card .info h4 { font-size: 14.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .p-card .info .meta { font-size: 12px; color: var(--muted); margin-top: 3px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .p-card .info .note { font-size: 12.5px; color: var(--muted); margin-top: 7px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .p-card .acts { display: flex; gap: 8px; padding: 0 15px 15px; }
+
+  /* ===== 状态框 ===== */
+  .state-box { text-align: center; padding: 56px 24px; background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); }
+  .state-box .big { font-size: 40px; margin-bottom: 12px; }
+  .state-box h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .state-box p { font-size: 14px; color: var(--muted); max-width: 460px; margin: 0 auto 18px; }
+
+  /* ===== 上传表单 ===== */
+  .add-card { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 24px; margin-bottom: 28px; box-shadow: 0 6px 24px rgba(18,35,63,.05); }
+  .add-card h3 { font-size: 16.5px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .dropzone { border: 2px dashed var(--border); border-radius: 10px; padding: 30px 20px; text-align: center; cursor: pointer; transition: all .2s; background: var(--surface-2); }
+  .dropzone:hover, .dropzone.drag { border-color: var(--primary); background: var(--primary-dim); }
+  .dropzone .dz-icon { font-size: 30px; margin-bottom: 8px; }
+  .dropzone p { font-size: 14px; font-weight: 600; }
+  .previews { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .pv { position: relative; width: 76px; height: 76px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+  .pv img { width: 100%; height: 100%; object-fit: cover; }
+  .pv button { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; border: none; background: rgba(18,35,63,.72); color: #fff; font-size: 11px; cursor: pointer; display: grid; place-items: center; }
+  .pv button:hover { background: #d05252; }
+  .form-row { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; margin-top: 14px; }
+  .add-card input[type="text"], .add-card textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 14px; font-family: var(--sans); color: var(--text); background: var(--surface); transition: border-color .2s; }
+  .add-card input:focus, .add-card textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-dim); }
+  .add-card textarea { margin-top: 12px; min-height: 76px; resize: vertical; }
+  .form-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+
+  /* ===== 灯箱 ===== */
+  .lightbox { position: fixed; inset: 0; z-index: 300; background: rgba(10, 18, 38, .92); display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 24px; }
+  .lightbox img { max-width: 92vw; max-height: 74vh; border-radius: 10px; box-shadow: 0 24px 80px rgba(0,0,0,.5); object-fit: contain; }
+  .lb-cap { margin-top: 16px; text-align: center; color: #e6eefc; max-width: 720px; }
+  .lb-cap b { font-size: 16px; display: block; }
+  .lb-cap span { font-size: 12.5px; color: #8fa3c4; display: block; margin-top: 3px; }
+  .lb-cap p { font-size: 13.5px; color: #c3d2ea; margin-top: 8px; white-space: pre-wrap; }
+  .lb-close { position: absolute; top: 18px; right: 22px; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(255,255,255,.12); color: #fff; font-size: 18px; cursor: pointer; }
+  .lb-close:hover { background: rgba(255,255,255,.24); }
+  .lb-prev, .lb-next { position: absolute; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border-radius: 50%; border: none; background: rgba(255,255,255,.12); color: #fff; font-size: 24px; cursor: pointer; line-height: 1; }
+  .lb-prev { left: 18px; } .lb-next { right: 18px; }
+  .lb-prev:hover, .lb-next:hover { background: rgba(255,255,255,.24); }
+  .lb-count { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); color: #8fa3c4; font-family: var(--mono); font-size: 13px; }
+
+  /* ===== 弹窗 ===== */
+  .modal { position: fixed; inset: 0; z-index: 400; background: rgba(10, 18, 38, .55); display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+  .modal-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; max-width: 560px; width: 100%; max-height: 86vh; overflow-y: auto; box-shadow: 0 24px 80px rgba(18,35,63,.3); }
+  .modal-card h3 { font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+  .pub-steps { margin: 18px 0; padding-left: 0; list-style: none; counter-reset: ps; }
+  .pub-steps li { position: relative; padding: 0 0 18px 40px; counter-increment: ps; }
+  .pub-steps li::before { content: counter(ps); position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%; background: var(--primary-dim); color: var(--primary); border: 1px solid rgba(37,99,235,.35); display: grid; place-items: center; font-family: var(--mono); font-size: 13px; font-weight: 700; }
+  .pub-steps li h4 { font-size: 14.5px; font-weight: 700; margin-bottom: 6px; }
+  .pub-steps li p { font-size: 13px; color: var(--muted); }
+  .pub-steps code { display: block; font-family: var(--mono); font-size: 12px; background: #0b1220; color: #dbe7fb; border: 1px solid #22304d; border-radius: 8px; padding: 9px 12px; margin-top: 8px; white-space: pre-wrap; word-break: break-all; }
+  .pub-steps .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+
+  /* ===== 设置指引 ===== */
+  .setup-wrap { padding: 8px 0 48px; }
+  details.setup { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); overflow: hidden; }
+  details.setup summary { padding: 16px 22px; font-size: 14.5px; font-weight: 700; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px; user-select: none; }
+  details.setup summary::-webkit-details-marker { display: none; }
+  details.setup summary .arr { margin-left: auto; transition: transform .2s; color: var(--muted); }
+  details.setup[open] summary .arr { transform: rotate(90deg); }
+  .setup-body { padding: 4px 22px 22px; border-top: 1px solid var(--border-soft); }
+  .setup-body ol { padding-left: 20px; margin: 12px 0; }
+  .setup-body li { font-size: 13.5px; color: var(--muted); margin-bottom: 10px; }
+  .setup-body li b { color: var(--text); }
+  .setup-body code { font-family: var(--mono); font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 5px; padding: 1px 7px; color: var(--primary); word-break: break-all; }
+
+  /* ===== 页脚 ===== */
+  footer { border-top: 1px solid var(--border-soft); padding: 36px 0; background: var(--bg-soft); }
+  .footer-grid { display: flex; justify-content: space-between; align-items: flex-start; gap: 32px; flex-wrap: wrap; }
+  .footer-brand p { color: var(--muted); font-size: 13px; margin-top: 8px; max-width: 320px; }
+  .footer-col h4 { font-size: 12.5px; font-weight: 700; margin-bottom: 10px; }
+  .footer-col a { display: block; color: var(--muted); font-size: 13px; margin-bottom: 6px; cursor: pointer; }
+  .footer-col a:hover { color: var(--primary); }
+  .copyright { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border-soft); }
+
+  /* ===== Toast ===== */
+  #toasts { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 500; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .toast { background: #12233f; color: #fff; font-size: 13.5px; font-weight: 600; border-radius: 999px; padding: 10px 20px; box-shadow: 0 10px 32px rgba(18,35,63,.35); animation: toastin .25s ease; }
+  .toast.err { background: #a03030; }
+  @keyframes toastin { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+  /* ===== 记忆环 ===== */
+  .ring-stage { position: relative; height: 460px; perspective: 760px; perspective-origin: 50% 40%; overflow: hidden; border-radius: 14px; background: radial-gradient(ellipse at 50% 42%, #10203f 0%, #0a1526 62%, #070f1d 100%); border: 1px solid #22304d; touch-action: pan-y; cursor: grab; user-select: none; }
+  .ring-stage:active { cursor: grabbing; }
+  .ring { position: absolute; inset: 0; transform-style: preserve-3d; }
+  .ring.snap { transition: transform .55s cubic-bezier(.2,.8,.2,1); }
+  .ring-item { position: absolute; left: 50%; top: 46%; width: 210px; height: 158px; margin: -79px 0 0 -105px; border-radius: 10px; overflow: hidden; border: 2px solid rgba(255,255,255,.14); box-shadow: 0 12px 36px rgba(0,0,0,.5); background: #0b1220; transition: border-color .25s, box-shadow .25s; }
+  .ring-item:hover { border-color: rgba(120,180,255,.85); box-shadow: 0 0 32px rgba(80,150,255,.5); }
+  .ring-item img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .ring-item .tag { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(transparent, rgba(5,12,26,.9)); color: #dbe7fb; font-size: 12px; padding: 20px 10px 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ring-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border-radius: 50%; border: none; background: rgba(255,255,255,.1); color: #fff; font-size: 20px; cursor: pointer; z-index: 5; }
+  .ring-nav:hover { background: rgba(255,255,255,.24); }
+  .ring-nav.prev { left: 14px; } .ring-nav.next { right: 14px; }
+  .ring-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); color: #8fa3c4; font-size: 12.5px; background: rgba(10,18,38,.6); border: 1px solid rgba(140,170,220,.22); padding: 4px 14px; border-radius: 999px; pointer-events: none; transition: opacity .5s; }
+
+  /* ===== 灯箱独白与留言 ===== */
+  .lb-mono { margin-top: 14px; text-align: left; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); border-radius: 10px; padding: 12px 14px; }
+  .lb-mono label { display: block; font-size: 12.5px; color: #8fa3c4; margin-bottom: 8px; }
+  .lb-mono textarea { width: 100%; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); color: #e6eefc; border-radius: 8px; padding: 9px 12px; font-size: 13.5px; font-family: var(--sans); min-height: 64px; resize: vertical; }
+  .lb-mono textarea:focus { outline: none; border-color: #4d9fff; }
+  .lb-btn { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22); color: #fff; border-radius: 7px; padding: 6px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: var(--sans); }
+  .lb-btn:hover { background: rgba(255,255,255,.22); }
+  .lb-btn.primary { background: linear-gradient(135deg, #2f6bff, #1e56e8); border-color: transparent; }
+  .lb-cmts { margin-top: 14px; text-align: left; max-height: 170px; overflow-y: auto; }
+  .cmt-head { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #8fa3c4; margin-bottom: 8px; }
+  .cmt { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; }
+  .cmt b { font-size: 13px; color: #e6eefc; }
+  .cmt .cmt-d { font-size: 11.5px; color: #7f93b5; margin-left: 8px; }
+  .cmt p { font-size: 13px; color: #c3d2ea; margin-top: 3px; }
+  .lb-cmts .empty { font-size: 12.5px; color: #7f93b5; }
+
+  .modal-card input[type="text"], .modal-card textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 14px; font-family: var(--sans); color: var(--text); background: var(--surface); }
+  .modal-card input[type="text"]:focus, .modal-card textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-dim); }
+  .modal-card textarea { margin-top: 10px; min-height: 70px; resize: vertical; }
+
+  @media (max-width: 640px) {
+    .ring-stage { height: 400px; perspective: 640px; }
+    .ring-item { width: 168px; height: 126px; margin: -63px 0 0 -84px; }
+  }
+
+  @media (max-width: 640px) {
+    .nav-links { display: none; }
+    .gh-star-btn .right { display: none; }
+    .form-row { grid-template-columns: 1fr; }
+    .hero { padding: 40px 0 28px; }
+    .tab { padding: 9px 16px; font-size: 13.5px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-glow g1"></div>
+<div class="bg-glow g2"></div>
+
+<!-- ================= 导航 ================= -->
+<header>
+  <div class="container nav">
+    <a class="brand" href="#top">
+      <span class="brand-mark">R</span>
+      <span>recall</span>
+    </a>
+    <ul class="nav-links">
+      <li><a data-goto="wall">回忆墙</a></li>
+      <li><a data-goto="local">我的回忆</a></li>
+      <li><a data-goto="ring">记忆环</a></li>
+      <li><a href="#setup">部署指引</a></li>
+    </ul>
+    <a class="gh-star-btn" id="starBtn" target="_blank" rel="noopener" aria-label="GitHub 仓库">
+      <span class="left">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        Star
+      </span>
+      <span class="right" id="starCount">—</span>
+    </a>
+  </div>
+</header>
+
+<main id="top">
+  <!-- ================= Hero ================= -->
+  <section class="hero container">
+    <span class="eyebrow"><span class="dot"></span>上传照片 · 记录当下 · 以后回忆</span>
+    <h1>把今天的瞬间，<span class="grad">留给未来的回忆</span></h1>
+    <p class="lead">上传照片、写下故事。回忆会先保存在你的浏览器里，发布后将永久陈列在公开回忆墙上 —— 照片存在 GitHub，任何人都可以浏览，任何人都可以贡献。</p>
+    <div class="hero-ctas">
+      <button class="btn btn-primary" data-goto="local-upload">📷 上传回忆</button>
+      <button class="btn btn-ghost" data-goto="wall">🖼️ 看看回忆墙</button>
+      <button class="btn btn-ghost" data-goto="ring">💫 走进记忆环</button>
+    </div>
+  </section>
+
+  <!-- ================= 主体 ================= -->
+  <section class="app container">
+    <div class="tabs">
+      <button class="tab active" data-tab="wall">🌐 回忆墙 <span class="cnt" id="tabWallCnt">…</span></button>
+      <button class="tab" data-tab="local">🔒 我的回忆 <span class="cnt" id="tabLocalCnt">0</span></button>
+      <button class="tab" data-tab="ring">💫 记忆环 <span class="cnt" id="tabRingCnt">0</span></button>
+    </div>
+
+    <!-- 回忆墙（公开） -->
+    <div class="view active" id="view-wall">
+      <div class="toolbar">
+        <span class="muted small" id="wallMeta">加载中…</span>
+        <button class="btn btn-ghost btn-sm" id="wallRefresh">↻ 刷新</button>
+      </div>
+      <div class="photo-grid" id="wallGrid"></div>
+      <div class="state-box" id="wallState" hidden></div>
+    </div>
+
+    <!-- 我的回忆（本地） -->
+    <div class="view" id="view-local">
+      <form class="add-card" id="addForm">
+        <h3>📷 记录一段新回忆</h3>
+        <div class="dropzone" id="dropzone">
+          <div class="dz-icon">🖼️</div>
+          <p>点击选择照片，或把照片拖到这里</p>
+          <p class="muted small">支持多选 · 保存前会自动压缩 · 仅存在你的浏览器里</p>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+        <div class="previews" id="previews"></div>
+        <div class="form-row">
+          <input type="text" id="fTitle" placeholder="标题（如：毕业旅行）" maxlength="30" required>
+          <input type="text" id="fAuthor" placeholder="你的名字（可选）" maxlength="20">
+        </div>
+        <textarea id="fNote" placeholder="写下这段回忆的故事…（可选）" maxlength="300"></textarea>
+        <div class="form-actions">
+          <span class="muted small" id="storageHint"></span>
+          <button class="btn btn-primary" type="submit">保存到我的回忆</button>
+        </div>
+      </form>
+      <div class="toolbar">
+        <span class="muted small" id="localMeta"></span>
+      </div>
+      <div class="photo-grid" id="localGrid"></div>
+      <div class="state-box" id="localEmpty" hidden>
+        <div class="big">🌱</div>
+        <h3>还没有回忆</h3>
+        <p>上传第一张照片吧。它会保存在这台设备上，随时可以发布到回忆墙和所有人分享。</p>
+      </div>
+    </div>
+
+    <!-- 记忆环（第一人称本地视图） -->
+    <div class="view" id="view-ring">
+      <div class="toolbar">
+        <span class="muted small" id="ringMeta"></span>
+        <button class="btn btn-ghost btn-sm" data-goto="local-upload">➕ 追加照片</button>
+      </div>
+      <div class="ring-stage" id="ringStage">
+        <div class="ring" id="ring"></div>
+        <button class="ring-nav prev" id="ringPrev" aria-label="向左旋转">‹</button>
+        <button class="ring-nav next" id="ringNext" aria-label="向右旋转">›</button>
+        <div class="ring-hint" id="ringHint">拖动环视四周 · 点击照片查看 / 编写独白</div>
+      </div>
+      <div class="state-box" id="ringEmpty" hidden>
+        <div class="big">💫</div>
+        <h3>记忆环还是空的</h3>
+        <p>上传照片后，它们会围成一个环。你站在环的中央，转动视线就能看到每一段回忆，点开照片还能写下只属于自己的独白。</p>
+        <button class="btn btn-primary" data-goto="local-upload">📷 上传第一张照片</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 部署指引 ================= -->
+  <section class="setup-wrap container" id="setup">
+    <details class="setup">
+      <summary>🚀 部署与配置指引 <span class="arr">›</span></summary>
+      <div class="setup-body">
+        <ol>
+          <li><b>创建仓库</b>：在 GitHub 新建一个 <b>公开</b> 仓库，把 <code>index.html</code> 上传进去。</li>
+          <li><b>修改配置</b>：编辑 <code>index.html</code> 中的 <code>CONFIG.repo</code>，改成 <code>你的用户名/仓库名</code>（默认分支若不是 main，同时修改 <code>CONFIG.branch</code>）。</li>
+          <li><b>开启 Pages</b>：仓库 Settings → Pages → Source 选择 <code>main</code> 分支 → Save。约 1 分钟后通过 <code>https://用户名.github.io/仓库名/</code> 访问。</li>
+          <li><b>创建 photos 目录</b>：打开 <code>https://github.com/用户名/仓库名/upload/main/photos</code> 上传任意一张照片，目录即自动创建，回忆墙开始工作。</li>
+        </ol>
+        <p class="muted small">
+          💡 回忆墙通过 GitHub 公开 API 读取仓库 <code>photos/</code> 目录，访客无需登录即可浏览；
+          上传需要 GitHub 账号 —— 你自己（仓库主人）在上传页可直接提交、立即上墙；
+          其他访客提交时 GitHub 会自动帮他们 Fork 并发起 Pull Request，由你审核合并后上墙。
+          文件名建议按 <code>日期_作者_标题.jpg</code> 命名，回忆墙会自动解析展示；发布弹窗会为带独白的照片生成同名 <code>.json</code> 独白/留言文件链接。
+        </p>
+      </div>
+    </details>
+  </section>
+</main>
+
+<!-- ================= 页脚 ================= -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="#top">
+          <span class="brand-mark">R</span>
+          <span>recall</span>
+        </a>
+        <p>一个生长在 GitHub 上的共享回忆相册。照片即记忆，仓库即时间胶囊。</p>
+      </div>
+      <div class="footer-col">
+        <h4>导航</h4>
+        <a data-goto="wall">回忆墙</a>
+        <a data-goto="local">我的回忆</a>
+        <a data-goto="ring">记忆环</a>
+        <a href="#setup">部署指引</a>
+      </div>
+      <div class="footer-col">
+        <h4>GitHub</h4>
+        <a id="footRepo" target="_blank" rel="noopener">仓库主页</a>
+        <a id="footUpload" target="_blank" rel="noopener">上传照片</a>
+        <a id="footIssues" target="_blank" rel="noopener">问题反馈</a>
+      </div>
+    </div>
+    <div class="copyright">© 2026 recall · 照片存储于 GitHub · 用 ❤ 和回忆构建</div>
+  </div>
+</footer>
+
+<!-- ================= 灯箱 ================= -->
+<div class="lightbox" id="lightbox" hidden>
+  <button class="lb-close" id="lbClose" aria-label="关闭">✕</button>
+  <span class="lb-count" id="lbCount"></span>
+  <button class="lb-prev" id="lbPrev" aria-label="上一张">‹</button>
+  <img id="lbImg" alt="回忆照片">
+  <button class="lb-next" id="lbNext" aria-label="下一张">›</button>
+  <div class="lb-cap">
+    <b id="lbTitle"></b>
+    <span id="lbMeta"></span>
+    <p id="lbNote"></p>
+    <div class="lb-mono" id="lbMono" hidden>
+      <label>🕯️ 独白 · 仅自己可见可编写，保存在本设备</label>
+      <textarea id="monoText" maxlength="300" placeholder="写下只属于这张照片的话…"></textarea>
+      <div style="text-align:right;margin-top:8px"><button class="lb-btn primary" id="monoSave">保存独白</button></div>
+    </div>
+    <div class="lb-cmts" id="lbCmts" hidden>
+      <div class="cmt-head"><span>💬 留言</span><button class="lb-btn" id="cmtOpen">写留言</button></div>
+      <div id="cmtList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 发布弹窗 ================= -->
+<div class="modal" id="publishModal" hidden>
+  <div class="modal-card">
+    <h3>🚀 发布到回忆墙</h3>
+    <p class="muted small">照片将提交到 GitHub 仓库，合并后对所有人可见。整个过程约 1 分钟。</p>
+    <ol class="pub-steps">
+      <li>
+        <h4>复制建议的文件名</h4>
+        <p>回忆墙会按「日期_作者_标题」自动解析展示（可选步骤，不改也能上墙）。</p>
+        <code id="pubNames"></code>
+        <div class="row"><button class="btn btn-ghost btn-sm" data-copy="#pubNames">复制文件名</button></div>
+      </li>
+      <li>
+        <h4>打开 GitHub 上传页，拖入照片</h4>
+        <p>可在页面上点铅笔图标把文件重命名为建议名称。</p>
+        <div class="row"><a class="btn btn-primary btn-sm" id="pubUploadLink" target="_blank" rel="noopener">打开上传页 ↗</a></div>
+        <div id="pubMonoBox" hidden style="margin-top:12px">
+          <p style="font-size:13px;color:var(--text)"><b>🕯️ 同步发布独白（可选）</b></p>
+          <p class="muted small">下面为每张带独白的照片生成配套 JSON 文件，打开后内容已自动预填，直接 Commit 即可。公开后，其他人可以为这段独白留言。</p>
+          <div class="row" id="pubMonoLinks"></div>
+        </div>
+      </li>
+      <li>
+        <h4>填写提交说明并提交</h4>
+        <p>把说明粘贴到 Commit changes 的输入框里，点击 Commit changes。</p>
+        <code id="pubMsg"></code>
+        <div class="row"><button class="btn btn-ghost btn-sm" data-copy="#pubMsg">复制说明</button></div>
+      </li>
+      <li>
+        <h4>等待合并上墙</h4>
+        <p>若你是仓库主人，提交后立即上墙；若提示无写入权限，GitHub 会自动 Fork 到你的账号，提交后点击「Create pull request」发起合并请求，仓库主人审核通过即可在回忆墙看到。没有 GitHub 账号？<a href="https://github.com/signup" target="_blank" rel="noopener">免费注册一个</a>。</p>
+      </li>
+    </ol>
+    <div class="row" style="justify-content:flex-end">
+      <button class="btn btn-ghost" id="pubClose">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 留言弹窗 ================= -->
+<div class="modal" id="cmtModal" hidden>
+  <div class="modal-card">
+    <h3>💬 给这段独白留言</h3>
+    <p class="muted small">留言通过 GitHub 提交（会自动 Fork 并发起 PR），仓库主人审核合并后对所有人可见。</p>
+    <input type="text" id="cmtAuthor" placeholder="你的名字" maxlength="20">
+    <textarea id="cmtText" placeholder="想对这段回忆说点什么…" maxlength="200"></textarea>
+    <ol class="pub-steps">
+      <li>
+        <h4>复制最新的文件内容</h4>
+        <p id="cmtHowTo"></p>
+        <code id="cmtSnippet"></code>
+        <div class="row"><button class="btn btn-ghost btn-sm" data-copy="#cmtSnippet">复制内容</button></div>
+      </li>
+      <li>
+        <h4>打开独白文件并提交</h4>
+        <p>提交更改后发起 Pull Request，等待仓库主人合并。</p>
+        <div class="row"><a class="btn btn-primary btn-sm" id="cmtEditLink" target="_blank" rel="noopener">打开文件 ↗</a></div>
+      </li>
+    </ol>
+    <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="cmtClose">关闭</button></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+/* =====================================================
+   站点配置 —— 部署前只需修改这一处
+   ===================================================== */
+const CONFIG = {
+  siteName: "recall",                // 站点名称
+  repo:     "marflaklittau-spec/recall",   // GitHub 仓库：用户名/仓库名（必改，需为公开仓库）
+  branch:   "main",                  // 仓库默认分支
+  photosPath: "photos"               // 回忆墙照片目录
+};
+
+/* ===================== 工具函数 ===================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now() + "-" + Math.random().toString(36).slice(2));
+const fmtDate = iso => new Date(iso).toISOString().slice(0, 10);
+const fmtTime = t => new Date(t).toTimeString().slice(0, 5);
+const isPlaceholder = /your-name/i.test(CONFIG.repo);
+
+function toast(msg, err = false) {
+  const d = document.createElement("div");
+  d.className = "toast" + (err ? " err" : "");
+  d.textContent = msg;
+  $("#toasts").appendChild(d);
+  setTimeout(() => d.remove(), 2600);
+}
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; }
+  catch {
+    const ta = document.createElement("textarea");
+    ta.value = t; document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand("copy"); ta.remove(); return ok;
+  }
+}
+document.addEventListener("click", async e => {
+  const btn = e.target.closest("[data-copy]");
+  if (!btn) return;
+  const el = $(btn.dataset.copy);
+  if (el && await copyText(el.textContent.trim())) toast("已复制 ✓");
+});
+
+/* ===================== IndexedDB ===================== */
+const DB_NAME = "recall-db", STORE = "memories";
+function openDB() {
+  return new Promise((res, rej) => {
+    const rq = indexedDB.open(DB_NAME, 1);
+    rq.onupgradeneeded = e => e.target.result.createObjectStore(STORE, { keyPath: "id" });
+    rq.onsuccess = e => res(e.target.result);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+const dbOp = (mode, fn) => openDB().then(db => new Promise((res, rej) => {
+  const tx = db.transaction(STORE, mode);
+  const rq = fn(tx.objectStore(STORE));
+  rq.onsuccess = () => res(rq.result);
+  rq.onerror = () => rej(rq.error);
+}));
+const dbAll  = () => dbOp("readonly", s => s.getAll());
+const dbPut  = rec => dbOp("readwrite", s => s.put(rec));
+const dbDel  = id => dbOp("readwrite", s => s.delete(id));
+
+/* ===================== 图片压缩 ===================== */
+function compressImage(file, maxSide = 1920, quality = 0.85) {
+  return new Promise(resolve => {
+    if (!/^image\//.test(file.type) || file.type === "image/gif") return resolve(file);
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      const ctx = cv.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      cv.toBlob(b => resolve(b || file), "image/jpeg", quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+/* ===================== 标签页切换 ===================== */
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
+  $("#view-wall").classList.toggle("active", name === "wall");
+  $("#view-local").classList.toggle("active", name === "local");
+  $("#view-ring").classList.toggle("active", name === "ring");
+  if (name === "ring") renderRing();
+  localStorage.setItem("recall-tab", name);
+}
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+document.addEventListener("click", e => {
+  const g = e.target.closest("[data-goto]");
+  if (!g) return;
+  const to = g.dataset.goto;
+  switchTab(to === "local-upload" ? "local" : to);
+  if (to === "local-upload") $("#fTitle").focus();
+});
+
+/* ===================== 灯箱 ===================== */
+let lbItems = [], lbIdx = 0;
+function openLightbox(items, idx) {
+  lbItems = items; lbIdx = idx;
+  $("#lightbox").hidden = false;
+  document.body.style.overflow = "hidden";
+  renderLb();
+}
+function renderLb() {
+  const it = lbItems[lbIdx];
+  $("#lbImg").src = it.src;
+  $("#lbTitle").textContent = it.title || "未命名回忆";
+  $("#lbMeta").textContent = [it.author, it.date].filter(Boolean).join(" · ") || "";
+  $("#lbCount").textContent = lbItems.length > 1 ? `${lbIdx + 1} / ${lbItems.length}` : "";
+  const isLocal = it.kind === "local";
+  $("#lbMono").hidden = !isLocal;
+  $("#lbCmts").hidden = isLocal;
+  if (isLocal) {
+    $("#lbNote").textContent = it.note || "";
+    $("#monoText").value = it.mono || "";
+  } else {
+    $("#lbNote").textContent = it.fetched ? (it.note || "（这段回忆还没有独白）") : "（独白加载中…）";
+    renderCmts(it);
+    if (it.baseName) fetchWallJson(it);
+  }
+}
+function renderCmts(it) {
+  const list = it.comments || [];
+  $("#cmtList").innerHTML = list.length
+    ? list.map(c => `<div class="cmt"><b>${esc(c.a)}</b><span class="cmt-d">${esc(c.d)}</span><p>${esc(c.t)}</p></div>`).join("")
+    : `<div class="empty">还没有留言，来做第一个留言的人吧。</div>`;
+}
+async function fetchWallJson(it) {
+  if (it.fetched) return;
+  it.fetched = true;
+  try {
+    const r = await fetch(`https://raw.githubusercontent.com/${CONFIG.repo}/${CONFIG.branch}/${CONFIG.photosPath}/${encodeURIComponent(it.baseName)}.json`);
+    if (r.ok) {
+      const d = await r.json();
+      it.wallData = d;
+      it.note = d.mono || "";
+      it.comments = Array.isArray(d.comments) ? d.comments : [];
+    }
+  } catch {}
+  if (lbItems[lbIdx] === it) renderLb();
+}
+$("#monoSave").onclick = async () => {
+  const it = lbItems[lbIdx];
+  if (!it || it.kind !== "local" || !it.saveMono) return;
+  const v = $("#monoText").value.trim();
+  await it.saveMono(v);
+  it.mono = v;
+  toast("独白已保存 ✓");
+};
+
+/* ---- 留言（公开独白） ---- */
+let cmtItem = null;
+$("#cmtOpen").onclick = () => {
+  const it = lbItems[lbIdx];
+  if (!it || it.kind !== "wall") return;
+  cmtItem = it;
+  $("#cmtAuthor").value = localStorage.getItem("recall-author") || "";
+  $("#cmtText").value = "";
+  buildCmt();
+  $("#cmtModal").hidden = false;
+};
+function buildCmt() {
+  if (!cmtItem) return;
+  const a = $("#cmtAuthor").value.trim() || "匿名";
+  const t = $("#cmtText").value.trim();
+  const data = cmtItem.wallData || { mono: "", comments: [] };
+  const json = t
+    ? JSON.stringify({ mono: data.mono || "", comments: [...(data.comments || []), { a, t, d: fmtDate(new Date()) }] }, null, 2)
+    : "";
+  $("#cmtSnippet").textContent = json || "（先在上方写下留言内容）";
+  const base = cmtItem.baseName + ".json";
+  if (cmtItem.wallData) {
+    $("#cmtEditLink").href = `https://github.com/${CONFIG.repo}/edit/${CONFIG.branch}/${CONFIG.photosPath}/${encodeURIComponent(base)}`;
+    $("#cmtHowTo").textContent = "打开文件后：全选原有内容 → 粘贴下方新内容 → Commit changes 发起 PR。";
+  } else {
+    $("#cmtEditLink").href = `https://github.com/${CONFIG.repo}/new/${CONFIG.branch}/${CONFIG.photosPath}?filename=${encodeURIComponent(base)}&value=${encodeURIComponent(json)}`;
+    $("#cmtHowTo").textContent = "独白文件尚未创建，内容已自动预填你的留言，打开后直接 Commit changes 即可。";
+  }
+}
+["cmtAuthor", "cmtText"].forEach(id => $("#" + id).addEventListener("input", buildCmt));
+$("#cmtClose").onclick = () => { $("#cmtModal").hidden = true; };
+$("#cmtModal").addEventListener("click", e => { if (e.target === e.currentTarget) $("#cmtModal").hidden = true; });
+function closeLightbox() { $("#lightbox").hidden = true; document.body.style.overflow = ""; }
+const lbStep = d => { lbIdx = (lbIdx + d + lbItems.length) % lbItems.length; renderLb(); };
+$("#lbClose").onclick = closeLightbox;
+$("#lbPrev").onclick = () => lbStep(-1);
+$("#lbNext").onclick = () => lbStep(1);
+$("#lightbox").addEventListener("click", e => { if (e.target === e.currentTarget) closeLightbox(); });
+document.addEventListener("keydown", e => {
+  if (!$("#lightbox").hidden) {
+    if (e.key === "Escape") closeLightbox();
+    if (e.key === "ArrowLeft") lbStep(-1);
+    if (e.key === "ArrowRight") lbStep(1);
+  }
+  if (e.key === "Escape" && !$("#publishModal").hidden) closePublish();
+  if (e.key === "Escape" && !$("#cmtModal").hidden) $("#cmtModal").hidden = true;
+});
+
+/* ===================== 我的回忆（本地） ===================== */
+let pendingFiles = [];
+let previewUrls = [], recordUrls = [], ringUrls = [];
+const makeURL = (blob, pool) => { const u = URL.createObjectURL(blob); pool.push(u); return u; };
+
+const dz = $("#dropzone"), fi = $("#fileInput");
+dz.addEventListener("click", () => fi.click());
+dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("drag"); });
+dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
+dz.addEventListener("drop", e => { e.preventDefault(); dz.classList.remove("drag"); addFiles(e.dataTransfer.files); });
+fi.addEventListener("change", () => { addFiles(fi.files); fi.value = ""; });
+function addFiles(list) {
+  [...list].filter(f => /^image\//.test(f.type)).forEach(f => pendingFiles.push(f));
+  renderPreviews();
+}
+function renderPreviews() {
+  previewUrls.forEach(u => URL.revokeObjectURL(u)); previewUrls = [];
+  $("#previews").innerHTML = pendingFiles.map((f, i) =>
+    `<div class="pv"><img src="${makeURL(f, previewUrls)}" alt=""><button type="button" data-rm="${i}" aria-label="移除">✕</button></div>`
+  ).join("");
+  $("#previews").querySelectorAll("[data-rm]").forEach(b => b.onclick = () => {
+    pendingFiles.splice(+b.dataset.rm, 1);
+    renderPreviews();
+  });
+}
+
+$("#addForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const title = $("#fTitle").value.trim();
+  if (!title) return toast("请填写标题", true);
+  if (!pendingFiles.length) return toast("请至少选择一张照片", true);
+  const author = $("#fAuthor").value.trim();
+  localStorage.setItem("recall-author", author);
+  const photos = [];
+  for (const f of pendingFiles) {
+    const b = await compressImage(f);
+    photos.push({ name: f.name, type: b.type || f.type, blob: b });
+  }
+  await dbPut({ id: uid(), title, author, note: $("#fNote").value.trim(), date: new Date().toISOString(), photos });
+  pendingFiles = [];
+  $("#addForm").reset();
+  $("#fAuthor").value = author;
+  renderPreviews(); renderLocal();
+  toast("已保存到我的回忆 ✓");
+});
+
+async function renderLocal() {
+  const recs = (await dbAll()).sort((a, b) => b.date.localeCompare(a.date));
+  recordUrls.forEach(u => URL.revokeObjectURL(u)); recordUrls = [];
+  $("#tabLocalCnt").textContent = recs.length;
+  $("#localEmpty").hidden = recs.length > 0;
+  $("#localGrid").innerHTML = recs.map((r, i) => `
+    <div class="p-card" data-rec="${i}">
+      <div class="ph"><img src="${makeURL(r.photos[0].blob, recordUrls)}" loading="lazy" alt="${esc(r.title)}">${r.photos.length > 1 ? `<span class="badge">${r.photos.length} 张</span>` : ""}</div>
+      <div class="info">
+        <h4>${esc(r.title)}</h4>
+        <div class="meta">📅 ${fmtDate(r.date)}${r.author ? ` · ✍️ ${esc(r.author)}` : ""}</div>
+        ${r.note ? `<div class="note">${esc(r.note)}</div>` : ""}
+      </div>
+      <div class="acts">
+        <button class="btn btn-primary btn-sm" data-pub="${i}">🚀 发布上墙</button>
+        <button class="btn btn-danger btn-sm" data-del="${r.id}">删除</button>
+      </div>
+    </div>`).join("");
+  $("#localMeta").textContent = recs.length ? `共 ${recs.length} 条回忆 · 仅保存在本设备浏览器中` : "";
+  if (navigator.storage?.estimate) navigator.storage.estimate().then(({ usage }) => {
+    if (usage) $("#storageHint").textContent = `本机回忆占用约 ${(usage / 1048576).toFixed(1)} MB`;
+  });
+
+  $("#localGrid").querySelectorAll("[data-rec]").forEach(el => el.addEventListener("click", e => {
+    if (e.target.closest("button")) return;
+    const r = recs[+el.dataset.rec];
+    openLightbox(r.photos.map(p => ({ src: makeURL(p.blob, recordUrls), title: r.title, author: r.author, date: fmtDate(r.date), note: r.note, mono: p.mono || "", kind: "local", saveMono: async t => { p.mono = t; await dbPut(r); } })), 0);
+  }));
+  $("#localGrid").querySelectorAll("[data-pub]").forEach(b => b.addEventListener("click", () => openPublish(recs[+b.dataset.pub])));
+  $("#localGrid").querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", async () => {
+    const r = recs.find(x => x.id === b.dataset.del);
+    if (confirm(`删除「${r.title}」？\n仅删除本设备上的保存，不影响已发布的回忆墙。`)) {
+      await dbDel(r.id); renderLocal(); toast("已删除");
+    }
+  }));
+}
+
+/* ===================== 发布弹窗 ===================== */
+function openPublish(rec) {
+  const d = fmtDate(rec.date);
+  const hhmm = new Date().toTimeString().slice(0, 5).replace(":", "");
+  const clean = s => (s || "匿名").replace(/[\\/:*?"<>|\s]+/g, "-");
+  const names = rec.photos.map((p, i) => {
+    const ext = (p.name.match(/\.(\w+)$/) || [, "jpg"])[1].toLowerCase();
+    return `${d}_${clean(rec.author)}_${clean(rec.title)}-${hhmm}${rec.photos.length > 1 ? "-" + (i + 1) : ""}.${ext}`;
+  });
+  $("#pubNames").textContent = names.join("\n");
+  $("#pubMsg").textContent = `photo: ${rec.title}` + (rec.note ? ` — ${rec.note}` : "");
+  const monoPhotos = rec.photos.map((p, i) => ({ p, i })).filter(x => (x.p.mono || "").trim());
+  $("#pubMonoBox").hidden = !monoPhotos.length;
+  $("#pubMonoLinks").innerHTML = monoPhotos.map(({ p, i }) => {
+    const base = names[i].replace(/\.\w+$/, "");
+    const json = JSON.stringify({ mono: p.mono.trim(), comments: [] }, null, 2);
+    const href = `https://github.com/${CONFIG.repo}/new/${CONFIG.branch}/${CONFIG.photosPath}?filename=${encodeURIComponent(base + ".json")}&value=${encodeURIComponent(json)}`;
+    return `<a class="btn btn-ghost btn-sm" href="${esc(href)}" target="_blank" rel="noopener">📄 ${esc(base)}.json ↗</a>`;
+  }).join("");
+  $("#publishModal").hidden = false;
+}
+const closePublish = () => { $("#publishModal").hidden = true; };
+$("#pubClose").onclick = closePublish;
+$("#publishModal").addEventListener("click", e => { if (e.target === e.currentTarget) closePublish(); });
+
+/* ===================== 记忆环（第一人称） ===================== */
+let ringItems = [];
+let ringRot = 0, ringDrag = false, ringLastX = 0, ringMoved = 0, ringAuto = true;
+
+async function renderRing() {
+  const recs = (await dbAll()).sort((a, b) => b.date.localeCompare(a.date));
+  ringUrls.forEach(u => URL.revokeObjectURL(u)); ringUrls = [];
+  ringItems = recs.flatMap(r => r.photos.map(p => ({
+    src: makeURL(p.blob, ringUrls),
+    title: r.title, author: r.author, date: fmtDate(r.date), note: r.note, mono: p.mono || "",
+    kind: "local",
+    saveMono: async t => { p.mono = t; await dbPut(r); }
+  })));
+  $("#tabRingCnt").textContent = ringItems.length;
+  const empty = !ringItems.length;
+  $("#ringStage").style.display = empty ? "none" : "";
+  $("#ringEmpty").hidden = !empty;
+  if (empty) { $("#ringMeta").textContent = ""; return; }
+  $("#ringMeta").textContent = `共 ${ringItems.length} 张照片围成记忆环 · 站在中央，拖动环视四周`;
+  const N = ringItems.length, slot = 360 / N;
+  const halfW = window.innerWidth < 640 ? 84 : 105;
+  const R = Math.max(340, halfW / Math.tan(Math.PI / N) + 60);
+  $("#ring").innerHTML = ringItems.map((it, i) =>
+    `<div class="ring-item" data-i="${i}" style="transform: rotateY(${i * slot}deg) translateZ(${R}px)"><img src="${it.src}" alt=""><span class="tag">${esc(it.title)}${it.mono ? " 🕯️" : ""}</span></div>`
+  ).join("");
+  ringRot = 0; applyRing();
+  $("#ring").querySelectorAll(".ring-item").forEach(el => el.addEventListener("click", () => {
+    if (ringMoved < 6) openLightbox(ringItems, +el.dataset.i);
+  }));
+}
+function applyRing() { $("#ring").style.transform = `rotateY(${ringRot}deg)`; }
+function snapRing() {
+  const slot = 360 / Math.max(1, ringItems.length);
+  ringRot = Math.round(ringRot / slot) * slot;
+  const el = $("#ring");
+  el.classList.add("snap");
+  applyRing();
+  setTimeout(() => el.classList.remove("snap"), 600);
+}
+
+const ringStage = $("#ringStage");
+ringStage.addEventListener("pointerdown", e => {
+  ringDrag = true; ringAuto = false; ringLastX = e.clientX; ringMoved = 0;
+  $("#ring").classList.remove("snap");
+  $("#ringHint").style.opacity = "0";
+});
+window.addEventListener("pointermove", e => {
+  if (!ringDrag) return;
+  const dx = e.clientX - ringLastX;
+  ringLastX = e.clientX; ringMoved += Math.abs(dx);
+  ringRot += dx * 0.25;
+  applyRing();
+});
+window.addEventListener("pointerup", () => {
+  if (!ringDrag) return;
+  ringDrag = false;
+  snapRing();
+});
+$("#ringPrev").onclick = () => { ringAuto = false; ringRot += 360 / Math.max(1, ringItems.length); snapRing(); };
+$("#ringNext").onclick = () => { ringAuto = false; ringRot -= 360 / Math.max(1, ringItems.length); snapRing(); };
+function tick() {
+  if (ringAuto && ringItems.length && $("#view-ring").classList.contains("active")) {
+    ringRot += 0.04;
+    applyRing();
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ===================== 回忆墙（公开） ===================== */
+const WALL_CACHE = "recall-wall-cache";
+const wallUploadUrl = `https://github.com/${CONFIG.repo}/upload/${CONFIG.branch}/${CONFIG.photosPath}`;
+
+function parseWallName(name) {
+  const base = name.replace(/\.\w+$/, "");
+  const m = base.match(/^(\d{4}-\d{2}-\d{2})_(.+?)_(.+?)(?:-\d+)*$/);
+  if (m) return { date: m[1], author: m[2], title: m[3] };
+  return { date: "", author: "", title: base };
+}
+
+function wallState(icon, title, msg, showUpload) {
+  $("#wallGrid").innerHTML = "";
+  $("#wallState").hidden = false;
+  $("#wallState").innerHTML = `
+    <div class="big">${icon}</div><h3>${title}</h3><p>${msg}</p>
+    ${showUpload && !isPlaceholder ? `<a class="btn btn-primary" href="${wallUploadUrl}" target="_blank" rel="noopener">📷 上传第一张照片 ↗</a>` : ""}
+    ${isPlaceholder ? `<a class="btn btn-ghost" href="#setup">查看部署指引</a>` : ""}`;
+}
+
+function renderWall(items, t) {
+  if (!items.length) { $("#tabWallCnt").textContent = "0"; $("#wallMeta").textContent = "目录为空"; return wallState("🌱", "回忆墙还是空的", "photos 目录中还没有照片，上传第一张吧。", true); }
+  $("#wallState").hidden = true;
+  $("#tabWallCnt").textContent = items.length;
+  $("#wallMeta").textContent = `共 ${items.length} 张回忆 · 更新于 ${fmtTime(t)} · 来自 GitHub 仓库`;
+  const sorted = [...items].sort((a, b) => b.name.localeCompare(a.name));
+  $("#wallGrid").innerHTML = sorted.map((it, i) => {
+    const p = parseWallName(it.name);
+    return `<div class="p-card" data-w="${i}">
+      <div class="ph"><img src="${esc(it.url)}" loading="lazy" alt="${esc(p.title)}"></div>
+      <div class="info">
+        <h4>${esc(p.title)}</h4>
+        <div class="meta">${p.date ? `📅 ${p.date}` : ""}${p.author ? ` · ✍️ ${esc(p.author)}` : ""}${!p.date && !p.author ? "🖼️ 来自公开仓库" : ""}</div>
+      </div>
+    </div>`;
+  }).join("");
+  $("#wallGrid").querySelectorAll("img").forEach(img => img.addEventListener("error", () => {
+    const d = document.createElement("div");
+    d.textContent = "💔";
+    d.style.cssText = "display:grid;place-items:center;height:100%;font-size:28px";
+    img.replaceWith(d);
+  }));
+  $("#wallGrid").querySelectorAll("[data-w]").forEach(el => el.addEventListener("click", () => {
+    openLightbox(sorted.map(x => ({ src: x.url, ...parseWallName(x.name), kind: "wall", baseName: x.name.replace(/\.\w+$/, "") })), +el.dataset.w);
+  }));
+}
+
+async function loadWall(force) {
+  if (isPlaceholder) {
+    $("#tabWallCnt").textContent = "0";
+    $("#wallMeta").textContent = "尚未配置仓库";
+    return wallState("⚙️", "还没有配置 GitHub 仓库", "网站管理员需将 index.html 中的 CONFIG.repo 改为自己的公开仓库地址，回忆墙才能开始收集回忆。", false);
+  }
+  if (!force) {
+    try {
+      const c = JSON.parse(localStorage.getItem(WALL_CACHE) || "null");
+      if (c && Date.now() - c.t < 5 * 60 * 1000) return renderWall(c.items, c.t);
+    } catch {}
+  }
+  $("#wallMeta").textContent = "加载中…";
+  try {
+    const r = await fetch(`https://api.github.com/repos/${CONFIG.repo}/contents/${CONFIG.photosPath}`, { headers: { Accept: "application/vnd.github+json" } });
+    if (r.status === 404) {
+      $("#tabWallCnt").textContent = "0"; $("#wallMeta").textContent = "目录为空";
+      return wallState("🌱", "回忆墙还是空的", `仓库中还没有照片。上传第一张照片，目录 ${CONFIG.photosPath}/ 会自动创建。`, true);
+    }
+    if (r.status === 403) {
+      $("#wallMeta").textContent = "请求受限";
+      return wallState("⏳", "GitHub API 请求过于频繁", "公开 API 有每小时次数限制，请稍等几分钟再刷新。", false);
+    }
+    if (!r.ok) throw new Error(r.status);
+    const items = (await r.json())
+      .filter(f => f.type === "file" && /\.(jpe?g|png|gif|webp|avif|bmp)$/i.test(f.name))
+      .map(f => ({ name: f.name, url: f.download_url }));
+    localStorage.setItem(WALL_CACHE, JSON.stringify({ t: Date.now(), items }));
+    renderWall(items, Date.now());
+  } catch {
+    $("#wallMeta").textContent = "加载失败";
+    wallState("⚠️", "回忆墙加载失败", "无法连接 GitHub API，请检查网络后重试。", false);
+  }
+}
+$("#wallRefresh").onclick = () => { localStorage.removeItem(WALL_CACHE); loadWall(true); toast("正在刷新回忆墙…"); };
+
+/* ===================== 链接与初始化 ===================== */
+const repoBase = "https://github.com/" + CONFIG.repo;
+$("#starBtn").href = repoBase;
+$("#footRepo").href = repoBase;
+$("#footUpload").href = wallUploadUrl;
+$("#footIssues").href = repoBase + "/issues";
+$("#pubUploadLink").href = wallUploadUrl;
+document.title = CONFIG.siteName + " · 回忆相册";
+
+if (!isPlaceholder) {
+  fetch(`https://api.github.com/repos/${CONFIG.repo}`)
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(d => { $("#starCount").textContent = d.stargazers_count >= 1000 ? (d.stargazers_count / 1000).toFixed(1) + "k" : d.stargazers_count; })
+    .catch(() => { $("#starCount").textContent = "Star"; });
+} else $("#starCount").textContent = "Star";
+
+$("#fAuthor").value = localStorage.getItem("recall-author") || "";
+const storedTab = localStorage.getItem("recall-tab");
+switchTab(["local", "ring"].includes(storedTab) ? storedTab : "wall");
+renderLocal();
+if (storedTab !== "ring") renderRing();
+requestAnimationFrame(tick);
+loadWall(false);
+</script>
+</body>
+</html>
