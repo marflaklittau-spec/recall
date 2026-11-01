@@ -382,7 +382,7 @@
         <pre style="background:#0f1c33;color:#c9e3ff;padding:14px 16px;border-radius:8px;overflow:auto;font-size:12px;line-height:1.7;font-family:var(--mono)">create table wall (
   id uuid primary key default gen_random_uuid(),
   title text default '', author text default '',
-  note text default '', mono text default '',
+  note text default '', mono_public boolean default true,
   date timestamptz default now(), storage_path text not null,
   owner uuid references auth.users(id), created_at timestamptz default now()
 );
@@ -390,6 +390,20 @@ alter table wall enable row level security;
 create policy "wall_read" on wall for select using (true);
 create policy "wall_write" on wall for insert to authenticated with check (true);
 create policy "wall_edit" on wall for update to authenticated using (auth.uid() = owner);
+create table wall_monos (
+  wall_id uuid primary key references wall(id) on delete cascade,
+  mono text default ''
+);
+alter table wall_monos enable row level security;
+create policy "wm_read" on wall_monos for select using (
+  exists (select 1 from wall w where w.id = wall_monos.wall_id and (w.mono_public or w.owner = auth.uid()))
+);
+create policy "wm_write" on wall_monos for insert to authenticated with check (
+  exists (select 1 from wall w where w.id = wall_id and w.owner = auth.uid())
+);
+create policy "wm_edit" on wall_monos for update to authenticated using (
+  exists (select 1 from wall w where w.id = wall_monos.wall_id and w.owner = auth.uid())
+);
 create table comments (
   id uuid primary key default gen_random_uuid(),
   wall_id uuid references wall(id) on delete cascade,
@@ -397,8 +411,12 @@ create table comments (
   created_at timestamptz default now()
 );
 alter table comments enable row level security;
-create policy "cmt_read" on comments for select using (true);
-create policy "cmt_write" on comments for insert to authenticated with check (true);
+create policy "cmt_read" on comments for select using (
+  exists (select 1 from wall w where w.id = comments.wall_id and (w.mono_public or w.owner = auth.uid()))
+);
+create policy "cmt_write" on comments for insert to authenticated with check (
+  exists (select 1 from wall w where w.id = wall_id and w.mono_public)
+);
 insert into storage.buckets (id, name, public) values ('photos','photos',true);
 create policy "img_read" on storage.objects for select using (bucket_id = 'photos');
 create policy "img_write" on storage.objects for insert to authenticated with check (bucket_id = 'photos');
@@ -459,9 +477,12 @@ create policy "img_delete" on storage.objects for delete to authenticated
     <span id="lbMeta"></span>
     <p id="lbNote"></p>
     <div class="lb-mono" id="lbMono" hidden>
-      <label>🕯️ 独白 · 仅发布者可见可编写</label>
+      <label>🕯️ 独白 · 仅发布者可编写</label>
       <textarea id="monoText" maxlength="300" placeholder="写下只属于这张照片的话…"></textarea>
-      <div style="text-align:right;margin-top:8px"><button class="lb-btn primary" id="monoSave">保存独白</button></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;flex-wrap:wrap;gap:8px">
+        <label style="font-size:12.5px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="monoPub" checked> 公开独白（公开后大家可见并留言）</label>
+        <button class="lb-btn primary" id="monoSave">保存独白</button>
+      </div>
     </div>
     <div class="lb-cmts" id="lbCmts" hidden>
       <div class="cmt-head"><span>💬 留言</span></div>
@@ -627,17 +648,19 @@ function renderLb() {
   $("#lbMeta").textContent = [it.author, it.date].filter(Boolean).join(" · ") || "";
   $("#lbCount").textContent = lbItems.length > 1 ? `${lbIdx + 1} / ${lbItems.length}` : "";
   const isLocal = it.kind === "local";
-  const canEditMono = isLocal || (it.kind === "wall" && sbUser && it.owner === sbUser.id);
+  const isOwner = it.kind === "wall" && sbUser && it.owner === sbUser.id;
+  const canEditMono = isLocal || isOwner;
   $("#lbMono").hidden = !canEditMono;
-  $("#lbCmts").hidden = isLocal;
+  $("#lbCmts").hidden = isLocal || (it.kind === "wall" && it.pub === false && !isOwner);
   if (isLocal) {
     $("#lbNote").textContent = it.note || "";
   } else {
-    $("#lbNote").textContent = it.mono || "（这段回忆还没有独白）";
+    $("#lbNote").textContent = it.wm || "（这段回忆还没有独白）";
     renderCmts(it);
     if (it.id) fetchWallCmts(it);
   }
-  $("#monoText").value = canEditMono ? (it.mono || "") : "";
+  $("#monoText").value = canEditMono ? (it.wm || "") : "";
+  $("#monoPub").checked = it.pub !== false;
   $("#lbDel").hidden = !(it.kind === "wall" && (isAdmin() || (sbUser && it.owner === sbUser.id)));
 }
 function renderCmts(it) {
@@ -662,9 +685,16 @@ $("#monoSave").onclick = async () => {
   if (it.kind === "local" && it.saveMono) {
     await it.saveMono(v); it.mono = v; toast("独白已保存 ✓");
   } else if (it.kind === "wall" && sbUser && it.owner === sbUser.id) {
-    const { error } = await sb.from("wall").update({ mono: v }).eq("id", it.id);
-    if (error) return toast("保存失败，请稍后再试", true);
-    it.mono = v; toast("独白已更新 ✓");
+    const pub = $("#monoPub").checked;
+    let up = await sb.from("wall_monos").upsert({ wall_id: it.id, mono: v });
+    if (up.error && /wall_monos|relationship/i.test(up.error.message))
+      up = await sb.from("wall").update({ mono: v }).eq("id", it.id);
+    if (up.error) return toast("保存失败，请稍后再试", true);
+    if (pub !== (it.pub !== false)) {
+      const wp = await sb.from("wall").update({ mono_public: pub }).eq("id", it.id);
+      if (wp.error) return toast("公开状态保存失败，请稍后再试", true);
+    }
+    it.wm = v; it.pub = pub; toast("独白已更新 ✓");
   }
 };
 $("#lbDel").onclick = async () => {
@@ -935,7 +965,7 @@ function renderWall(rows) {
   $("#wallMeta").textContent = `共 ${rows.length} 张回忆 · 更新于 ${fmtTime(Date.now())}`;
   $("#wallGrid").innerHTML = rows.map((it, i) => `
     <div class="p-card" data-w="${i}">
-      <div class="ph"><img src="${esc(wallUrl(it.storage_path))}" loading="lazy" alt="${esc(it.title || "回忆")}">${it.mono ? '<span class="badge">🕯️ 有独白</span>' : ""}</div>
+      <div class="ph"><img src="${esc(wallUrl(it.storage_path))}" loading="lazy" alt="${esc(it.title || "回忆")}">${((it.wall_monos && it.wall_monos[0] && it.wall_monos[0].mono) || it.mono) ? '<span class="badge">🕯️ 有独白</span>' : ""}</div>
       <div class="info">
         <h4>${esc(it.title || "未命名回忆")}</h4>
         <div class="meta">${it.author ? `✍️ ${esc(it.author)} · ` : ""}📅 ${fmtDate(it.date)}</div>
@@ -950,7 +980,7 @@ function renderWall(rows) {
   $("#wallGrid").querySelectorAll("[data-w]").forEach(el => el.addEventListener("click", () => {
     openLightbox(rows.map(x => ({
       src: wallUrl(x.storage_path), title: x.title, author: x.author, date: fmtDate(x.date),
-      kind: "wall", id: x.id, owner: x.owner, mono: x.mono || "", path: x.storage_path
+      kind: "wall", id: x.id, owner: x.owner, wm: (x.wall_monos && x.wall_monos[0] && x.wall_monos[0].mono) || x.mono || "", pub: x.mono_public !== false, path: x.storage_path
     })), +el.dataset.w);
   }));
 }
@@ -963,7 +993,8 @@ async function loadWall(force) {
   }
   $("#wallMeta").textContent = "加载中…";
   try {
-    const { data, error } = await sb.from("wall").select("*").order("created_at", { ascending: false });
+    let { data, error } = await sb.from("wall").select("*, wall_monos(mono)").order("created_at", { ascending: false });
+    if (error && /wall_monos|relationship/i.test(error.message)) ({ data, error } = await sb.from("wall").select("*").order("created_at", { ascending: false }));
     if (error) throw error;
     renderWall(data || []);
   } catch {

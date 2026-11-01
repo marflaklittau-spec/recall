@@ -5,7 +5,7 @@ create table if not exists public.wall (
   author text not null default '',
   note text not null default '',
   date timestamptz not null default now(),
-  mono text not null default '',
+  mono_public boolean not null default true,
   storage_path text not null,
   owner uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now()
@@ -18,6 +18,25 @@ create policy "wall_write" on public.wall for insert to authenticated with check
 drop policy if exists "wall_edit" on public.wall;
 create policy "wall_edit" on public.wall for update to authenticated using (auth.uid() = owner);
 
+-- 独白独立成表：私密独白只有照片主人可见（RLS 硬隔离）
+create table if not exists public.wall_monos (
+  wall_id uuid primary key references public.wall(id) on delete cascade,
+  mono text not null default ''
+);
+alter table public.wall_monos enable row level security;
+drop policy if exists "wm_read" on public.wall_monos;
+create policy "wm_read" on public.wall_monos for select using (
+  exists (select 1 from public.wall w where w.id = wall_monos.wall_id and (w.mono_public or w.owner = auth.uid()))
+);
+drop policy if exists "wm_write" on public.wall_monos;
+create policy "wm_write" on public.wall_monos for insert to authenticated with check (
+  exists (select 1 from public.wall w where w.id = wall_id and w.owner = auth.uid())
+);
+drop policy if exists "wm_edit" on public.wall_monos;
+create policy "wm_edit" on public.wall_monos for update to authenticated using (
+  exists (select 1 from public.wall w where w.id = wall_monos.wall_id and w.owner = auth.uid())
+);
+
 create table if not exists public.comments (
   id uuid primary key default gen_random_uuid(),
   wall_id uuid not null references public.wall(id) on delete cascade,
@@ -27,9 +46,13 @@ create table if not exists public.comments (
 );
 alter table public.comments enable row level security;
 drop policy if exists "cmt_read" on public.comments;
-create policy "cmt_read" on public.comments for select using (true);
+create policy "cmt_read" on public.comments for select using (
+  exists (select 1 from public.wall w where w.id = comments.wall_id and (w.mono_public or w.owner = auth.uid()))
+);
 drop policy if exists "cmt_write" on public.comments;
-create policy "cmt_write" on public.comments for insert to authenticated with check (true);
+create policy "cmt_write" on public.comments for insert to authenticated with check (
+  exists (select 1 from public.wall w where w.id = wall_id and w.mono_public)
+);
 
 insert into storage.buckets (id, name, public) values ('photos', 'photos', true)
 on conflict (id) do update set public = true;
