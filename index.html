@@ -483,12 +483,21 @@ $("#lbDel").onclick = async () => {
 $("#lbPub").onclick = () => { const it = lbItems[lbIdx]; if (it?.kind === "local" && it.rec) openPublish(it.rec); };
 $("#lbLocalDel").onclick = async () => {
   const it = lbItems[lbIdx];
-  if (!it?.rec) return;
-  if (!confirm(`删除「${it.rec.title}」？\n仅删除本设备上的保存，不影响已发布的回忆墙。`)) return;
-  await dbDel(it.rec.id);
-  closeLightbox();
-  renderLocal();
-  if (ringSrc === "local") renderRing();
+  if (!it?.rec || !it.photo) return;
+  const rec = it.rec;
+  const idx = rec.photos.indexOf(it.photo);
+  if (idx < 0) return;
+  if (!confirm("确定删除这张照片？\n（同一条回忆里的其他照片会保留）")) return;
+  if (rec.photos.length <= 1) {
+    await dbDel(rec.id);            // 最后一张：连同整条回忆一起删除
+  } else {
+    rec.photos.splice(idx, 1);      // 只删当前这一张
+    await dbPut(rec);
+  }
+  lbItems.splice(lbIdx, 1);
+  ringDirty = true;
+  if (!lbItems.length) closeLightbox();
+  else { if (lbIdx >= lbItems.length) lbIdx = lbItems.length - 1; renderLb(); }
   toast("已删除");
 };
 $("#cmtList").addEventListener("click", async e => {
@@ -518,7 +527,16 @@ $("#cmtSend").onclick = async () => {
   renderCmts(it);
   toast("留言成功 ✓");
 };
-function closeLightbox() { $("#lightbox").hidden = true; document.body.style.overflow = ""; }
+let ringDirty = false;   // 灯箱开着时暂缓刷新记忆环，避免对象 URL 被提前回收
+function closeLightbox() {
+  $("#lightbox").hidden = true;
+  document.body.style.overflow = "";
+  if (ringDirty) {
+    ringDirty = false;
+    renderLocal();
+    if (ringSrc === "local") renderRing();
+  }
+}
 const lbStep = d => { lbIdx = (lbIdx + d + lbItems.length) % lbItems.length; renderLb(); };
 $("#lbClose").onclick = closeLightbox;
 $("#lbPrev").onclick = () => lbStep(-1);
@@ -627,7 +645,7 @@ async function renderRing() {
   const localItems = recs.flatMap(r => r.photos.map(p => ({
     src: makeURL(p.blob, ringUrls),
     title: r.title, author: r.author, date: fmtDate(r.date), note: r.note, mono: p.mono || "",
-    kind: "local", rec: r,
+    kind: "local", rec: r, photo: p,
     saveMono: async t => { p.mono = t; await dbPut(r); }
   })));
   $("#srcLocal .cnt").textContent = localItems.length;
